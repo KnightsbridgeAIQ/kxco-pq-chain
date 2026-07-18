@@ -2,7 +2,24 @@
 
 HTTP client for the KXCO post-quantum identity relay.
 
+[![npm](https://img.shields.io/npm/v/kxco-pq-chain?label=npm)](https://www.npmjs.com/package/kxco-pq-chain)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen)](#install)
+
+
 Institutions sign ML-DSA-65 intents with their existing post-quantum key, POST them to the KXCO relay at `https://relay.kxco.ai`, and receive a transaction hash. KXCO validates the signature, pays gas in ARMR, and submits the EVM transaction on Armature L1. No wallets, no gas, no Ethereum node required.
+
+
+## Armature L1 at a glance
+
+| | |
+|---|---|
+| Network | Armature L1 — permissioned, EVM-compatible settlement layer |
+| Chain ID | 1111111 |
+| Consensus | QBFT PoA, instant finality (~2 s target block time) |
+| PQ verification | On-chain ML-DSA-65 — precompile `0x0b` (NIST FIPS 204) |
+| Token | ARMR (gas paid by the KXCO relay — clients hold no crypto) |
+| Explorer & docs | [chain.kxco.ai](https://chain.kxco.ai) |
 
 ---
 
