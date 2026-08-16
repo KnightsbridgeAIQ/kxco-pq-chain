@@ -47,7 +47,7 @@ before(async () => {
     publicKey: keypair.publicKey,
     secretKey: keypair.secretKey,
     async sign(message) {
-      return mlDsa.ml_dsa65.sign(keypair.secretKey, message)
+      return Buffer.from(mlDsa.sign(keypair.secretKey, message), 'hex')
     },
   }
 })
@@ -212,10 +212,9 @@ test('intent signature is a valid ML-DSA-65 signature over the canonical message
   await chain.registerInstitution({ publicKeyHex: pubHex })
 
   const { operation, institutionKid, nonce, timestamp, payload, signature } = lastRequest
-  const msg    = buildSigningMessage(operation, institutionKid, nonce, timestamp, payload)
-  const sigBuf = Buffer.from(signature, 'hex')
+  const msg = buildSigningMessage(operation, institutionKid, nonce, timestamp, payload)
 
-  const valid = mlDsa.ml_dsa65.verify(mockIdentity.publicKey, msg, sigBuf)
+  const valid = mlDsa.verify(mockIdentity.publicKey, msg, signature)
   assert.ok(valid, 'signature must verify against institution public key')
 })
 
