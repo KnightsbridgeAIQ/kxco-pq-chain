@@ -25,13 +25,18 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm CLI to the 11.x line
+        # Trusted Publishing's OIDC integration needs npm >= 11.5.1 and the npm
+        # bundled with the runner's Node is older. Pinned to 11.x, never @latest:
+        # npm 12 requires Node ^22.22 || ^24.15 || >=26, and @latest broke this
+        # exact step in kxco-post-quantum, so an unpinned install is an outage.
+        run: npm install -g npm@11
 
       - run: npm ci
       - run: npm test
 
       - name: Publish
-        run: npm publish --access public --no-provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
