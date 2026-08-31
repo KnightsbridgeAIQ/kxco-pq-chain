@@ -11,6 +11,33 @@ HTTP client for the KXCO post-quantum identity relay.
 Institutions sign ML-DSA-65 intents with their existing post-quantum key, POST them to the KXCO relay at `https://relay.kxco.ai`, and receive a transaction hash. KXCO validates the signature, pays gas in ARMR, and submits the EVM transaction on Armature L1. No wallets, no gas, no Ethereum node required.
 
 
+## Release integrity
+
+Every release of this package is checkable without asking us for anything.
+
+- **Provenance.** Each release carries a SLSA provenance attestation tying the
+  published tarball to the commit and workflow that built it. Verify with
+  `npm audit signatures`, or read it directly from
+  `registry.npmjs.org/-/npm/v1/attestations/kxco-pq-chain@<version>`.
+- **Bill of materials.** A CycloneDX SBOM is published as a GitHub Release asset
+  at `releases/download/v<version>/sbom.cyclonedx.json`, a permanent
+  unauthenticated URL. Not an expiring build artifact.
+- **Pinned where it matters.** Third-party dependencies are pinned to exact
+  versions, never ranges, so the code that performs the cryptography cannot
+  change without a release. Sibling `kxco-*` packages sit on caret ranges
+  deliberately: it means a correctness fix in the base package reaches you
+  without a release of every package above it. That is not theoretical. When
+  `@noble/post-quantum` 0.7.1 was found to fail NIST SLH-DSA verification
+  vectors, the revert in the base package propagated here on the next install.
+  Every GitHub Action is pinned by 40-character commit SHA.
+- **Conformance underneath.** The cryptography comes from
+  [`kxco-post-quantum`](https://www.npmjs.com/package/kxco-post-quantum), which
+  is run against **2,103 NIST ACVP vectors (0 failed)** and a **225-check
+  cross-implementation interoperability matrix** against liboqs, Bouncy Castle
+  and two pure-Python implementations, in both directions and with negative
+  controls. Its published tarball also rebuilds bit-for-bit from its own tag,
+  verified in CI on every run.
+
 ## Armature L1 at a glance
 
 | | |

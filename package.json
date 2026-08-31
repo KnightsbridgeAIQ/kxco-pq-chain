@@ -1,6 +1,6 @@
 {
   "name": "kxco-pq-chain",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "HTTP client for the KXCO post-quantum identity relay. Sign ML-DSA-65 intents and POST to relay.kxco.ai: KXCO submits EVM transactions on Armature L1. No wallets, no gas.",
   "keywords": [
     "post-quantum",
