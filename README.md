@@ -76,9 +76,10 @@ import { KxcoChain } from 'kxco-pq-chain'
 
 // identity is a KxcoIdentity from kxco-pq-sdk (must expose .kid and .sign())
 const chain = new KxcoChain({
-  relay:    'https://relay.kxco.ai',
-  identity: institutionIdentity,
-  timeout:  10_000,  // optional, ms, default 10 000
+  identity:   institutionIdentity,
+  licenceKey: process.env.KXCO_LICENCE_KEY,  // or set the env var and omit this
+  // relay defaults to https://relay.kxco.ai
+  timeout:    10_000,                        // optional, ms, default 10 000
 })
 
 // Register the institution on-chain — called once during onboarding
@@ -96,7 +97,9 @@ const result = await chain.issueCredential({
 })
 ```
 
-All methods return `Promise<{ txHash: string, blockNumber: number }>` and throw `KxcoChainError` on failure.
+All methods return `Promise<{ txHash: string, blockNumber: number, chainId: 1111111 }>` and throw `KxcoChainError` on failure.
+
+Writes to the hosted relay **require a licence key**. Without one the constructor throws `LICENCE_REQUIRED` immediately — at boot, not at the first write, so a service cannot come up looking healthy and fail on a customer's first credential. A relay on `localhost` needs no licence, so local development and CI are unaffected.
 
 ---
 
@@ -108,15 +111,24 @@ Your backend constructs an intent describing the operation (register, issue, rev
 
 ## API
 
-All methods are on a `KxcoChain` instance and return `Promise<{ txHash: string, blockNumber: number }>`.
+All methods are on a `KxcoChain` instance and return `Promise<{ txHash: string, blockNumber: number, chainId: 1111111 }>`.
+
+`chainId` is asserted, not decorative: a response naming another chain throws `WRONG_CHAIN`, and a response with no chain id throws `MISSING_CHAIN_ID`. See [`RELAY.md`](RELAY.md) for the full server contract.
 
 ### `new KxcoChain(opts)`
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `opts.relay` | `string` | yes | Relay base URL — use `'https://relay.kxco.ai'` |
 | `opts.identity` | `{ kid: string; sign(msg: Uint8Array): Promise<Uint8Array> }` | yes | `KxcoIdentity` from `kxco-pq-sdk` or any object with `.kid` and `.sign()` |
+| `opts.relay` | `string` | no | Relay base URL. Default: `'https://relay.kxco.ai'` |
+| `opts.licenceKey` | `string` | for a hosted relay | Falls back to `KXCO_LICENCE_KEY` / `KXCO_LICENSE_KEY`. Missing throws at construction |
+| `opts.licenceHeader` | `'authorization' \| 'x-kxco-licence'` | no | Which header carries it. Default `'authorization'`, as a Bearer token |
+| `opts.requireLicence` | `boolean` | no | Overrides the loopback heuristic in both directions |
+| `opts.strictChainId` | `boolean` | no | Require `chainId` in every response. Default `true` |
 | `opts.timeout` | `number` | no | Request timeout in ms. Default: `10000` |
+| `opts.onUsageEvent` | `(event) => void` | no | Structured record per write, for your own observability. Off by default |
+
+Read-only: `chain.relay` and `chain.licensed`. The licence key itself is never exposed.
 
 ---
 
@@ -174,6 +186,40 @@ Anchor a high-value attestation envelope hash on-chain.
 |---|---|---|---|
 | `payloadHash` | `string` | yes | Hex SHA-256 of the signed attestation envelope (64 hex chars) |
 | `purpose` | `string` | yes | Purpose string, e.g. `'regulatory-report'` |
+
+---
+
+### `chain.revokeKid({ kid, reason? })`
+
+Revoke a key outright. This is what a registry lookup reads when it answers `revoked`, so it is the operation that makes `anchored+live` verification start refusing envelopes signed by that key.
+
+`revokeCredential` revokes a credential the institution issued to a user; this revokes the key itself.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `kid` | `string` | yes | 16-hex-char kid to revoke |
+| `reason` | `string` | no | Human-readable revocation reason |
+
+New wire operation in 2.0.0. A relay that has not implemented it answers `400 UNKNOWN_OPERATION`.
+
+---
+
+### `chain.anchorHash({ hash, purpose? })`
+
+Anchor any hex SHA-256 digest on-chain. The general form of `anchorAuditRoot` and `anchorAttestation`, which keep their own on-chain semantics.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `hash` | `string` | yes | Hex SHA-256 digest (64 hex chars) |
+| `purpose` | `string` | no | Purpose string, e.g. `'quarterly-report'` |
+
+New wire operation in 2.0.0.
+
+---
+
+### `chain.registerIdentity(...)` and `chain.registerAgent(...)`
+
+Names over the existing `registerInstitution` and `issueAgentCredential` wire operations, so the rest of the stack can use one vocabulary. Identical arguments, identical bytes on the wire.
 
 ---
 

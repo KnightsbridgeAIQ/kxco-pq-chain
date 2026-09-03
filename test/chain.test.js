@@ -24,9 +24,18 @@ function startMockRelay(handler) {
   })
 }
 
+const TX_HASH = '0x' + 'de'.repeat(32)
+
 function okResponse(res, extra = {}) {
   res.writeHead(200, { 'content-type': 'application/json' })
-  res.end(JSON.stringify({ ok: true, txHash: '0xdeadbeef', blockNumber: 228000, ...extra }))
+  // chainId is part of the relay contract now: the client refuses a response
+  // that does not name the chain the transaction landed on. See RELAY.md.
+  //
+  // txHash is a real 32-byte hash rather than the old '0xdeadbeef' placeholder,
+  // because the client now validates the shape. A caller stores this as proof;
+  // a mock that returns something no chain could produce was testing against a
+  // contract the relay does not have to meet.
+  res.end(JSON.stringify({ ok: true, txHash: TX_HASH, blockNumber: 228000, chainId: 1111111, ...extra }))
 }
 
 function errResponse(res, status, code, message) {
@@ -64,10 +73,10 @@ function makeChain(overrides = {}) {
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-test('constructor: throws if relay missing', () => {
+test('constructor: defaults to the hosted relay, which then demands a licence', () => {
   assert.throws(
     () => new KxcoChain({ identity: mockIdentity }),
-    (err) => err instanceof KxcoChainError && err.code === 'BAD_CONFIG'
+    (err) => err instanceof KxcoChainError && err.code === 'LICENCE_REQUIRED',
   )
 })
 
@@ -85,7 +94,7 @@ test('registerInstitution: sends correct intent and returns txHash', async () =>
   const pubHex = Buffer.from(mockIdentity.publicKey).toString('hex')
   const result = await chain.registerInstitution({ publicKeyHex: pubHex, metadataUrl: 'https://example.com/meta.json' })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(result.blockNumber, 228000)
   assert.equal(lastRequest.operation, 'registerInstitution')
   assert.equal(lastRequest.institutionKid, mockIdentity.kid)
@@ -108,7 +117,7 @@ test('issueCredential: sends correct intent', async () => {
     expiresAt: 1800000000,
   })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'issueCredential')
   assert.equal(lastRequest.payload.userKid, userKid)
   assert.equal(lastRequest.payload.role, 'verified-user')
@@ -121,7 +130,7 @@ test('revokeCredential: sends correct intent', async () => {
   const chain  = makeChain()
   const result = await chain.revokeCredential({ userKid: 'aabbccddeeff0011', reason: 'kyc-expired' })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'revokeCredential')
   assert.equal(lastRequest.payload.userKid, 'aabbccddeeff0011')
   assert.equal(lastRequest.payload.reason, 'kyc-expired')
@@ -134,7 +143,7 @@ test('anchorAuditRoot: sends correct intent', async () => {
   const rootHash = 'a'.repeat(64)
   const result   = await chain.anchorAuditRoot({ rootHash, entryCount: 100 })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'anchorAuditRoot')
   assert.equal(lastRequest.payload.rootHash, rootHash)
   assert.equal(lastRequest.payload.entryCount, 100)
@@ -147,7 +156,7 @@ test('anchorAttestation: sends correct intent', async () => {
   const payloadHash = 'b'.repeat(64)
   const result      = await chain.anchorAttestation({ payloadHash, purpose: 'regulatory-report' })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'anchorAttestation')
   assert.equal(lastRequest.payload.payloadHash, payloadHash)
   assert.equal(lastRequest.payload.purpose, 'regulatory-report')
@@ -162,7 +171,7 @@ test('rotateKey: sends correct intent', async () => {
   const pubHex  = Buffer.from(newKey.publicKey).toString('hex')
   const result  = await chain.rotateKey({ newKid, newPublicKeyHex: pubHex })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'rotateKey')
   assert.equal(lastRequest.payload.newKid, newKid)
 })
@@ -184,7 +193,7 @@ test('issueAgentCredential: sends correct intent', async () => {
     expiresAt: 1900000000,
   })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'issueAgentCredential')
   assert.equal(lastRequest.payload.agentKid, agentKid)
   assert.equal(lastRequest.payload.agentType, 'llm')
@@ -198,7 +207,7 @@ test('revokeAgentCredential: sends correct intent', async () => {
   const chain  = makeChain()
   const result = await chain.revokeAgentCredential({ agentKid: 'aabbccddeeff0022', reason: 'decommissioned' })
 
-  assert.equal(result.txHash, '0xdeadbeef')
+  assert.equal(result.txHash, TX_HASH)
   assert.equal(lastRequest.operation, 'revokeAgentCredential')
   assert.equal(lastRequest.payload.agentKid, 'aabbccddeeff0022')
   assert.equal(lastRequest.payload.reason, 'decommissioned')
