@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.1
+
+Whether a relay verifies on-chain is a property of that relay, so the answer is
+now cached per relay URL across clients in a process rather than rediscovered
+by each one. Constructing a client per write is a fair pattern and one real
+consumer does exactly that; a probe on every write doubled the request count to
+learn something that could not have changed. Five minute TTL, so a relay that
+cuts over later is still picked up without a restart.
+
+A failed probe is not cached, so one transient error cannot pin every client in
+the process to v1.
+
 ## 2.1.0
 
 **The client uses on-chain verification where the relay offers it.** No code

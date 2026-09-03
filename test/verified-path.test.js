@@ -36,12 +36,14 @@ const identity = {
 /** @param {{ verified: boolean, nonce?: number }} opts */
 async function relay({ verified, nonce = 3 } = {}) {
   const seen = []
+  let probes = 0
   const server = createServer(async (req, res) => {
     const json = (status, body) => {
       res.writeHead(status, { 'content-type': 'application/json' })
       res.end(JSON.stringify(body))
     }
     if (req.method === 'GET' && req.url === '/intents/v2/params') {
+      probes++
       return verified
         ? json(200, { ok: true, verifyingRelay: VERIFIER, chainId: CHAIN_ID })
         : json(503, { ok: false, code: 'VERIFIED_PATH_UNAVAILABLE' })
@@ -57,7 +59,7 @@ async function relay({ verified, nonce = 3 } = {}) {
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   return {
     url: `http://127.0.0.1:${server.address().port}`,
-    seen, last: () => seen.at(-1),
+    seen, last: () => seen.at(-1), get probes() { return probes },
     close: () => new Promise((r) => server.close(r)),
   }
 }
@@ -195,4 +197,18 @@ test('the locally derived operation tags match the deployed contract', async (t)
   for (const name of OPERATION_NAMES) {
     assert.equal(OPERATION_TAGS[name], live[name], `${name} tag differs from the contract`)
   }
+})
+
+test('a client constructed per write does not probe per write', async () => {
+  // server.js in the Round Table anchor service does `new KxcoChain(...)` on
+  // every anchor, which is a fair pattern. Probing each time would double the
+  // request count to learn something that cannot have changed.
+  const r = await relay({ verified: true })
+  try {
+    for (let i = 0; i < 3; i++) {
+      await client(r.url).anchorAuditRoot({ rootHash: 'ab'.repeat(32), entryCount: i })
+    }
+    assert.equal(r.probes, 1, `expected one capability probe, saw ${r.probes}`)
+    assert.equal(r.seen.length, 3)
+  } finally { await r.close() }
 })

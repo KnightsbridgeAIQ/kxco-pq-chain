@@ -44,6 +44,11 @@ function isLoopback(url) {
   }
 }
 
+// Whether a relay verifies on-chain is a property of that relay, so the answer
+// is shared across clients in this process rather than rediscovered by each.
+const DISCOVERY = new Map()
+const DISCOVERY_TTL_MS = 5 * 60_000
+
 export class KxcoChain {
   #relay
   #identity
@@ -291,6 +296,18 @@ export class KxcoChain {
    */
   async #discoverV2() {
     if (this.#v2 !== undefined) return this.#v2
+
+    // Cached per relay URL, not per client. Constructing a client per write is
+    // a common and reasonable pattern, and a probe on every one of them would
+    // double the request count for no new information. A TTL rather than
+    // forever, so a relay that cuts over later is picked up by a long-running
+    // process without a restart.
+    const hit = DISCOVERY.get(this.#relay)
+    if (hit && Date.now() - hit.at < DISCOVERY_TTL_MS) {
+      this.#v2 = hit.value
+      return this.#v2
+    }
+
     try {
       // Deliberately shorter than the write timeout. This is a capability
       // probe, and a relay that does not answer it promptly is one that does
@@ -304,9 +321,12 @@ export class KxcoChain {
       this.#v2 = res.ok && body?.ok && body.verifyingRelay
         ? { verifyingRelay: body.verifyingRelay, chainId: body.chainId ?? CHAIN_ID }
         : null
+      DISCOVERY.set(this.#relay, { at: Date.now(), value: this.#v2 })
     } catch {
       // A relay that cannot be asked is treated as v1. Guessing the other way
       // would send a verified intent that the relay cannot process at all.
+      // Deliberately NOT cached: a transient failure must not pin every client
+      // in this process to v1 for the whole TTL.
       this.#v2 = null
     }
     return this.#v2
