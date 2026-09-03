@@ -36,6 +36,8 @@
 // thing that will judge it.
 
 import { mlDsa, fingerprint } from 'kxco-post-quantum'
+import { keccak_256 } from '@noble/hashes/sha3.js'
+import { utf8ToBytes } from '@noble/hashes/utils.js'
 
 const enc = new TextEncoder()
 
@@ -142,6 +144,24 @@ export function abiEncode(items) {
 
 /** `operationTags()` — keccak256 of the signature, first four bytes. */
 export const OPERATION_TAGS_SELECTOR = '0xe047006b'
+
+/** The eight operation names, in the order `operationTags()` returns them. */
+export const OPERATION_NAMES = [
+  'registerInstitution', 'issueCredential', 'revokeCredential', 'anchorAuditRoot',
+  'anchorAttestation', 'rotateInstitutionKey', 'issueAgentCredential', 'revokeAgentCredential',
+]
+
+/**
+ * The operation tags, derived locally.
+ *
+ * The contract defines each as `keccak256("<operationName>")`, so a client can
+ * compute them without a network call and without trusting a relay to tell it
+ * what it is about to sign. `fetchOperationTags` remains the drift check
+ * against a deployment, and the two are asserted equal in the test suite.
+ */
+export const OPERATION_TAGS = Object.fromEntries(
+  OPERATION_NAMES.map((n) => [n, '0x' + Buffer.from(keccak_256(utf8ToBytes(n))).toString('hex')]),
+)
 
 /**
  * Read the operation tags from a deployed relay.

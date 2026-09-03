@@ -21,6 +21,8 @@
  * worse than failing.
  */
 
+import { OPERATION_TAGS, authorisingMessage, abiEncode } from './intents-v2.js'
+import { toV2 } from './v2-payload.js'
 import { buildIntent } from './intents.js'
 import { KxcoChainError } from './errors.js'
 
@@ -50,6 +52,8 @@ export class KxcoChain {
   #licenceHeader
   #requireLicence
   #strictChainId
+  #publicKeyHex
+  #v2
   #onUsageEvent
 
   /**
@@ -79,6 +83,8 @@ export class KxcoChain {
     requireLicence,
     strictChainId = true,
     onUsageEvent,
+    publicKeyHex,
+    verifiedPath,
   } = {}) {
     if (!relay) throw new KxcoChainError('relay URL is required', { code: 'BAD_CONFIG' })
     if (!identity) throw new KxcoChainError('identity is required', { code: 'BAD_CONFIG' })
@@ -99,6 +105,13 @@ export class KxcoChain {
     this.#requireLicence = requireLicence ?? !isLoopback(this.#relay)
     this.#strictChainId = strictChainId
     this.#onUsageEvent = onUsageEvent ?? null
+    // Needed only on the verified path, where the key travels with the call so
+    // the chain can check it against the registry. identity exposes it on the
+    // SDK's KxcoIdentity; pass it explicitly for any other implementation.
+    this.#publicKeyHex = publicKeyHex ?? identity.publicKeyHex ??
+      (identity.publicKey ? Buffer.from(identity.publicKey).toString('hex') : null)
+    // undefined = not probed, null = not available on this relay.
+    this.#v2 = verifiedPath === false ? null : undefined
 
     // Fail at construction, not at the first write. A service that boots
     // without a licence and only discovers it when the first credential is
@@ -270,8 +283,94 @@ export class KxcoChain {
     })
   }
 
+  /**
+   * Does this relay verify on-chain?
+   *
+   * Asked once and cached. A relay that has not cut over answers 503 and the
+   * client stays on v1, so upgrading this package is safe against either.
+   */
+  async #discoverV2() {
+    if (this.#v2 !== undefined) return this.#v2
+    try {
+      // Deliberately shorter than the write timeout. This is a capability
+      // probe, and a relay that does not answer it promptly is one that does
+      // not have the endpoint. Making a caller wait the full write timeout to
+      // learn that, once per process, is not worth it.
+      const res = await fetch(`${this.#relay}/intents/v2/params`, {
+        headers: this.#headers(),
+        signal: AbortSignal.timeout(Math.min(this.#timeout, 3_000)),
+      })
+      const body = await res.json().catch(() => null)
+      this.#v2 = res.ok && body?.ok && body.verifyingRelay
+        ? { verifyingRelay: body.verifyingRelay, chainId: body.chainId ?? CHAIN_ID }
+        : null
+    } catch {
+      // A relay that cannot be asked is treated as v1. Guessing the other way
+      // would send a verified intent that the relay cannot process at all.
+      this.#v2 = null
+    }
+    return this.#v2
+  }
+
+  /** The contract's current nonce for this identity. Not guessable. */
+  async #nonce(kid) {
+    const res = await fetch(`${this.#relay}/intents/v2/nonce/${kid}`, {
+      headers: this.#headers(),
+      signal: AbortSignal.timeout(this.#timeout),
+    })
+    const body = await res.json().catch(() => null)
+    if (!res.ok || !body?.ok || !Number.isInteger(body.nonce)) {
+      throw new KxcoChainError(
+        body?.error ?? `could not read the on-chain nonce (${res.status})`,
+        { code: body?.code ?? 'NONCE_UNAVAILABLE', status: res.status },
+      )
+    }
+    return body.nonce
+  }
+
+  /**
+   * Build and sign a v2 intent, or return null if this call cannot take the
+   * verified path and should fall back to v1.
+   */
+  async #buildV2(operation, payload) {
+    const v2 = await this.#discoverV2()
+    if (!v2) return null
+
+    const mapped = toV2(operation, payload)
+    if (!mapped) return null            // operation has no verified form
+
+    if (!this.#publicKeyHex) {
+      throw new KxcoChainError(
+        `${this.#relay} verifies signatures on-chain, which requires this identity's ` +
+        'public key to travel with the call. Pass publicKeyHex to the constructor, or ' +
+        'use an identity that exposes it.',
+        { code: 'PUBLIC_KEY_REQUIRED' },
+      )
+    }
+
+    const kid = this.#identity.kid
+    const nonce = operation === 'registerInstitution' ? 0 : await this.#nonce(kid)
+    const message = authorisingMessage({
+      relayAddress: v2.verifyingRelay,
+      operationTag: OPERATION_TAGS[operation === 'rotateKey' ? 'rotateInstitutionKey' : operation],
+      kid, nonce, args: mapped.args, chainId: v2.chainId,
+    })
+    const signature = Buffer.from(await this.#identity.sign(message)).toString('hex')
+
+    return {
+      operation, institutionKid: kid, publicKeyHex: this.#publicKeyHex,
+      signature, nonce, payload: mapped.body,
+    }
+  }
+
   async #send(operation, payload, meta = {}) {
-    const intent = await buildIntent({
+    // Prefer the verified path where the relay offers it. Same public API, and
+    // the difference is who the chain records as having authorised the write:
+    // the relay, or the institution. Falls back silently to v1 so upgrading
+    // this package works against a relay either side of the cutover.
+    const v2Intent = await this.#buildV2(operation, payload)
+    const path = v2Intent ? '/intents/v2' : '/intents'
+    const intent = v2Intent ?? await buildIntent({
       operation,
       institutionKid: this.#identity.kid,
       payload,
@@ -283,7 +382,7 @@ export class KxcoChain {
 
     let response
     try {
-      response = await fetch(`${this.#relay}/intents`, {
+      response = await fetch(`${this.#relay}${path}`, {
         method: 'POST',
         headers: this.#headers(),
         body: JSON.stringify(intent),

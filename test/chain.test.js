@@ -14,6 +14,16 @@ function startMockRelay(handler) {
     server = createServer(async (req, res) => {
       let body = ''
       for await (const chunk of req) body += chunk
+
+      // A v2-capable client probes GET /intents/v2/params first. This mock is
+      // a v1 relay, so answer as one. Without this, JSON.parse('') threw in
+      // the handler and no response was ever written.
+      if (req.method === 'GET') {
+        res.writeHead(503, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, code: 'VERIFIED_PATH_UNAVAILABLE' }))
+        return
+      }
+
       lastRequest = JSON.parse(body)
       handler(lastRequest, res)
     })

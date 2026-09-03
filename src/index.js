@@ -15,5 +15,7 @@ export {
   fetchOperationTags,
   OPERATION_TAGS_SELECTOR,
   ARGS as INTENT_V2_ARGS,
+  OPERATION_TAGS,
+  OPERATION_NAMES,
   // CHAIN_ID already comes from client.js; both are 1111111 and one export wins.
 } from './intents-v2.js'

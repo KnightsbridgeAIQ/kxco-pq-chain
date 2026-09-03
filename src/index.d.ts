@@ -47,7 +47,22 @@ export interface KxcoChainOptions {
   /** Relay base URL. Defaults to https://relay.kxco.ai */
   relay?:     string
   /** KxcoIdentity from kxco-pq-sdk — must have .kid (string) and .sign(Uint8Array) */
-  identity:   { kid: string; sign(message: Uint8Array): Promise<Uint8Array> }
+  identity:   { kid: string; sign(message: Uint8Array): Promise<Uint8Array>; publicKeyHex?: string; publicKey?: Uint8Array }
+  /**
+   * This identity's ML-DSA public key, hex, no 0x.
+   *
+   * Required only where the relay verifies signatures on-chain, because the
+   * key travels with the call so the chain can check it against the registry.
+   * Taken from `identity` when it exposes one.
+   */
+  publicKeyHex?: string
+  /**
+   * Set false to stay on the v1 relay path even where on-chain verification
+   * is available. An escape hatch while migrating, not a long-term setting:
+   * v1 records that the relay wrote something, v2 records that the
+   * institution authorised it.
+   */
+  verifiedPath?: false
   timeout?:   number
   /**
    * Required for writes to a hosted relay. Falls back to `KXCO_LICENCE_KEY`

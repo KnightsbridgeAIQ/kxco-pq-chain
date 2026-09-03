@@ -33,6 +33,17 @@ async function relay(respond = () => ({ ok: true, txHash: '0x' + 'ab'.repeat(32)
   const server = createServer(async (req, res) => {
     let body = ''
     for await (const chunk of req) body += chunk
+
+    // A v2-capable client probes GET /intents/v2/params before its first
+    // write. This mock is a v1 relay, so answer 503 the way one does. Falling
+    // through to JSON.parse('') threw inside the handler, the response never
+    // came, and every test sat until its timeout.
+    if (req.method === 'GET') {
+      res.writeHead(503, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, code: 'VERIFIED_PATH_UNAVAILABLE' }))
+      return
+    }
+
     const intent = JSON.parse(body)
     seen.push({ intent, headers: req.headers })
 

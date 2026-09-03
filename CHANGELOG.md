@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.1.0
+
+**The client uses on-chain verification where the relay offers it.** No code
+change: upgrade the package and existing calls take the verified path.
+
+On the v1 path the relay checks your ML-DSA-65 signature and then writes under
+its own authority, so the block records that the relay wrote something. On the
+verified path your public key and signature travel with the call and every
+validator checks them through the ML-DSA-65 precompile as part of consensus,
+so the block records that *you* authorised it.
+
+The client asks the relay once, via `GET /intents/v2/params`, and falls back to
+v1 when the answer is no. Upgrading is therefore safe against a relay on either
+side of the cutover, and a relay that cuts over later is picked up by the next
+process to start.
+
+Two things a caller may need to do:
+
+- **Provide the identity public key.** It travels with the call so the chain
+  can check it against the registry record. Taken from `identity.publicKeyHex`
+  or `identity.publicKey` when present; otherwise pass `publicKeyHex`. If it is
+  missing the client says so before sending, rather than letting the write fail
+  on-chain where it is indistinguishable from a wrong key.
+- **Nothing else.** The sequential on-chain nonce is read for you.
+
+`verifiedPath: false` pins a client to v1 while migrating.
+
+Also added: `OPERATION_TAGS` and `OPERATION_NAMES`, the operation tags derived
+locally as `keccak256("<operationName>")` rather than fetched, so a client
+never has to trust a relay to tell it what it is about to sign.
+`fetchOperationTags` remains, and the test suite asserts the two agree against
+the deployed contract.
+
+`@noble/hashes` is now a direct dependency, pinned to 2.4.0 to match
+`kxco-post-quantum` so a single copy resolves.
+
 ## 2.0.0
 
 **Breaking.** Three changes, each of which will stop an existing integration
