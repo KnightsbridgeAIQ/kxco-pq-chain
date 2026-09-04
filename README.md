@@ -32,7 +32,7 @@ Every release of this package is checkable without asking us for anything.
   Every GitHub Action is pinned by 40-character commit SHA.
 - **Conformance underneath.** The cryptography comes from
   [`kxco-post-quantum`](https://www.npmjs.com/package/kxco-post-quantum), which
-  is run against **2,103 NIST ACVP vectors (0 failed)** and a **225-check
+  is run against **2,103 NIST ACVP vectors: 1,793 passed, 0 failed, 310 skipped** and a **225-check
   cross-implementation interoperability matrix** against liboqs, Bouncy Castle
   and two pure-Python implementations, in both directions and with negative
   controls. Its published tarball also rebuilds bit-for-bit from its own tag,
