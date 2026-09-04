@@ -303,13 +303,19 @@ const canonical = canonicalize({ b: 2, a: 1 })  // '{"a":1,"b":2}'
 
 ---
 
-## What this does NOT do
+## Where this fits
 
-- This is not a general-purpose Ethereum client. It does not wrap ethers.js or expose RPC calls.
-- It does not read chain state. To query registered institutions, verify credentials, or inspect on-chain data, use `ethers.js` directly against `https://chain.kxco.ai/rpc`.
-- It does not manage wallets, sign raw transactions, or interact with ARMR directly.
+A relay client, deliberately narrow: sign an intent, hand it over, get a
+transaction back.
 
----
+**Your institution never touches a wallet, holds ARMR, or runs a node.** KXCO
+pays the gas and submits. That is the design.
+
+**Reading chain state** — point `ethers.js` at `https://chain.kxco.ai/rpc`.
+Armature L1 is public, so confirming a write needs neither this package nor us.
+
+- [`kxco-post-quantum`](https://www.npmjs.com/package/kxco-post-quantum) for the ML-DSA-65 primitives
+- [`kxco-pq-sdk`](https://www.npmjs.com/package/kxco-pq-sdk) for issued and managed identity
 
 ## Part of the KXCO stack
 
