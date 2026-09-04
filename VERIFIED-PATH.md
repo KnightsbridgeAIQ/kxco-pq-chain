@@ -19,6 +19,30 @@ chain data without an API key and without asking us.
 
 ---
 
+## Whose chain this is
+
+The endpoints in this document, `relay.kxco.ai` and `chain.kxco.ai`, are KXCO's
+reference deployment. They are what you point at to evaluate the stack, and
+what a customer on the hosted service uses.
+
+A deployed instance is yours. Armature L1 is software you run: your validator
+set, chosen and contracted by you, on infrastructure you or your nominated
+operators control, with your own relay in front of it. KXCO builds and licenses
+it; KXCO does not have to be in the path.
+
+That is the reason the verification is a consensus rule rather than a service
+check. **A protocol rule holds whoever runs the validators.** Every node that
+syncs re-executes the ML-DSA-65 verification and rejects a block whose
+signature does not verify, so the guarantee this document describes is a
+property of the software, not of who is hosting it. Nothing here changes when
+the operator changes: the same client, the same three calls, the same bytes
+signed, pointed at your own relay.
+
+Where you see `relay.kxco.ai` below, read "your relay". The client takes the
+URL as configuration.
+
+---
+
 ## You may already be done
 
 `kxco-pq-chain` 2.1 and later take this path automatically wherever the relay
