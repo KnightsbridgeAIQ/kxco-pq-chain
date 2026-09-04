@@ -51,6 +51,7 @@
     "LICENSE",
     "README.md",
     "RELAY.md",
+    "VERIFIED-PATH.md",
     "src"
   ],
   "engines": {

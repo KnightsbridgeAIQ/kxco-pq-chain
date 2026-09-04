@@ -1,5 +1,17 @@
 # Relay server contract
 
+> **This describes the v1 path. On a chain that has completed the Phase 3
+> cutover it no longer writes, and a valid v1 intent is answered
+> `410 USE_VERIFIED_PATH`.** Read [VERIFIED-PATH.md](./VERIFIED-PATH.md) for the
+> contract that is live: your signature goes to the chain and every validator
+> verifies it as a consensus rule, so a counterparty confirms your write from
+> chain data rather than from us.
+>
+> `kxco-pq-chain` 2.1 and later switch to it automatically where a relay offers
+> it, and fall back to this one where it does not, so upgrading is safe against
+> either.
+
+
 What `kxco-pq-chain` 2.x sends, and what a relay must do with it.
 
 This document describes the contract the **client** implements and enforces. It is written so the hosted relay at `https://relay.kxco.ai` and any self-hosted relay can be checked against one specification, and so a customer can reason about failures without reading our server code.
