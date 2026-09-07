@@ -1,3 +1,6 @@
 node_modules/
 *.log
 .DS_Store
+
+# Generated evidence bundle. Reproduce with `npm run evidence`.
+dist/
