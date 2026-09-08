@@ -44,10 +44,11 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      # No NODE_AUTH_TOKEN here, deliberately. A token present in the
+      # environment is used in preference to the package's trusted publisher,
+      # so a stale secret turns a working OIDC publish into a 404 on PUT.
       - name: Publish
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # The SBOM runs AFTER the publish and cannot fail the job. The package is
       # already on the registry by this point, so failing here would misreport a
