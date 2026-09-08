@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.3
+
+Documentation and a dependency refresh. No source change.
+
+**ASSESSMENT.md.** Where this package's boundary falls, what cryptographic
+agility it has beyond what the primitives provide, and what constrains its
+lifecycle. It references the `kxco-post-quantum` evidence rather than restating
+it, because a second copy of a conformance claim invites the reader to count it
+twice.
+
+**An evidence bundle.** `npm run evidence` records identity, this package's own
+tests, its SBOM, registry signature verification, and the `kxco-post-quantum`
+version actually installed rather than the range declared.
+
+**`kxco-post-quantum` refreshed to 1.7.2**, from 1.3.0 in the previous
+lockfile. Within the existing range, so no declared dependency changed. Tests
+pass unchanged.
+
 ## 2.1.1
 
 Whether a relay verifies on-chain is a property of that relay, so the answer is
