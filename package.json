@@ -1,6 +1,6 @@
 {
   "name": "kxco-pq-chain",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Sign an ML-DSA-65 intent, POST it to the KXCO relay, and Armature L1 verifies the signature in consensus: every validator checks it as a protocol rule, so a counterparty confirms the write from chain data. KXCO pays the gas. No wallets, no node.",
   "keywords": [
     "post-quantum",

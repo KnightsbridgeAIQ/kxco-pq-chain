@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.4
+
+Documentation. No source change.
+
+**ASSESSMENT.md rewritten.** The previous version led with what the package
+does not do and worked back from there, which described the product as a set of
+gaps and buried what it actually proves. It now states the capabilities, the
+evidence behind them, and where each concern is owned across the stack.
+
+Nothing has been softened away. Facts a buyer needs are still here, stated as
+scope rather than deficiency: which package owns what, what a deployment has to
+supply, and what a claim is measured against. The change is which way round they
+are told.
+
 ## 2.1.3
 
 Documentation and a dependency refresh. No source change.
