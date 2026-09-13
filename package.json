@@ -68,6 +68,7 @@
   },
   "funding": "https://kxco.ai",
   "publishConfig": {
+    "provenance": true,
     "access": "public"
   }
 }
