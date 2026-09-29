@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.6
+
+Documentation. No source change.
+
+A NOTICE file names the copyright owner, Knightsbridge Financial Ltd, trading
+as KXCO, and ships in the package, so anyone who redistributes it carries the
+attribution, as section 4(d) of the Apache License requires.
+
 ## 2.1.5
 
 Documentation. No source change.
