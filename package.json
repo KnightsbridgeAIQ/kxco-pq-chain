@@ -1,7 +1,7 @@
 {
   "name": "kxco-pq-chain",
-  "version": "2.1.4",
-  "description": "Sign an ML-DSA-65 intent, POST it to the KXCO relay, and Armature L1 verifies the signature in consensus: every validator checks it as a protocol rule, so a counterparty confirms the write from chain data. KXCO pays the gas. No wallets, no node.",
+  "version": "2.1.5",
+  "description": "Post-quantum writes to Armature L1: every validator verifies your ML-DSA-65 signature in consensus, and KXCO pays the gas. No wallet, token or node. Register identities, issue and revoke credentials, rotate keys, and anchor audit roots and attestations.",
   "keywords": [
     "post-quantum",
     "pqc",
@@ -16,7 +16,16 @@
     "identity-registry",
     "credential",
     "audit-anchor",
-    "attestation"
+    "attestation",
+    "pqc-migration",
+    "crypto-agility",
+    "digital-signature",
+    "non-repudiation",
+    "tamper-evident",
+    "gasless",
+    "on-chain-verification",
+    "evm",
+    "key-rotation"
   ],
   "license": "Apache-2.0",
   "author": "Shayne Heffernan and John Heffernan",

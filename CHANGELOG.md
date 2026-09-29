@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.5
+
+Documentation. No source change.
+
+**The npm page leads with what the package proves.** The first screen now says
+that every Armature L1 validator verifies an intent's ML-DSA-65 signature in
+consensus, that KXCO pays the gas under your licence, the evidence underneath
+and the migration dates set by NIST, Executive Order 14412, OMB M-26-15 and the
+UK NCSC.
+
+A family table maps every KXCO package to the job it does, and a new For
+institutions section sets out the operated services and how to reach us. The
+evidence documents are unchanged and linked from the page.
+
+The quick start registers the institution with the `publicKeyHex` a
+`KxcoIdentity` exposes, and How it works describes the verified path the client
+takes against the hosted relay.
+
 ## 2.1.4
 
 Documentation. No source change.
