@@ -62,6 +62,18 @@ payload: <RFC 8785 JCS canonical JSON of the payload object>
 
 The payload is canonicalised with JCS (`canonicalize()` in `src/jcs.js`) so key order in the JSON body cannot change what was signed.
 
+### What the client refuses before it sends
+
+The client refuses these with `KxcoChainError`, and nothing is signed or sent:
+
+| Input | `code` | Why |
+|---|---|---|
+| An object key named `__proto__` anywhere in the payload | `BAD_ARGUMENT` | A JavaScript object takes it as its prototype rather than as a member, so it would drop out of the canonical JSON and go unsigned |
+| A line break (`\r` or `\n`) or an unpaired UTF-16 surrogate in `operation`, `institutionKid`, `nonce` or `timestamp` | `BAD_ARGUMENT` | A line break lets text pass from one header line to the next, and every unpaired surrogate encodes to the same UTF-8 (U+FFFD), so two different intents would sign the same bytes |
+| A `relay` option that is not a string | `BAD_CONFIG` | Thrown by `new KxcoChain()`, before any request |
+
+Every message the client does sign is byte for byte what it was before these checks. A relay that rebuilds the message with this package's `buildSigningMessage()` and `canonicalize()` meets the same refusals, as a `KxcoChainError` carrying no HTTP status, and should answer them as a `400`.
+
 ---
 
 ## What the relay MUST reject

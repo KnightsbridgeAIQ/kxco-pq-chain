@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test'
 import assert                   from 'node:assert/strict'
 
 import { mlDsa, fingerprint }   from 'kxco-post-quantum'
-import { KxcoChain, KxcoChainError, buildSigningMessage } from '../src/index.js'
+import { KxcoChain, KxcoChainError, buildSigningMessage, buildIntent, canonicalize } from '../src/index.js'
 
 // ── Mock relay ────────────────────────────────────────────────────────────────
 
@@ -95,6 +95,16 @@ test('constructor: throws if identity missing', () => {
     () => new KxcoChain({ relay: 'http://localhost' }),
     (err) => err instanceof KxcoChainError && err.code === 'BAD_CONFIG'
   )
+})
+
+test('constructor: a relay that is not a string is refused with BAD_CONFIG', () => {
+  for (const relay of [123, {}, [], true]) {
+    assert.throws(
+      () => new KxcoChain({ relay, identity: mockIdentity }),
+      (err) => err instanceof KxcoChainError && err.code === 'BAD_CONFIG',
+      JSON.stringify(relay),
+    )
+  }
 })
 
 // ── registerInstitution ───────────────────────────────────────────────────────
@@ -235,6 +245,53 @@ test('intent signature is a valid ML-DSA-65 signature over the canonical message
 
   const valid = mlDsa.verify(mockIdentity.publicKey, msg, signature)
   assert.ok(valid, 'signature must verify against institution public key')
+})
+
+// ── what the signing message will and will not carry ──────────────────────────
+
+test('canonicalize: an object key named "__proto__" is refused with KxcoChainError, at any depth', () => {
+  for (const text of ['{"__proto__":{"a":1}}', '{"a":{"__proto__":1}}', '[{"b":2,"__proto__":null}]']) {
+    assert.throws(() => canonicalize(JSON.parse(text)), (err) => err instanceof KxcoChainError, text)
+  }
+})
+
+test('buildIntent: a payload with a "__proto__" key is refused before anything is signed', async () => {
+  let signed = false
+  const identity = { kid: mockIdentity.kid, async sign() { signed = true; return new Uint8Array(0) } }
+  await assert.rejects(
+    buildIntent({ operation: 'anchorHash', institutionKid: identity.kid, payload: JSON.parse('{"__proto__":{"amount":999}}'), identity }),
+    (err) => err instanceof KxcoChainError,
+  )
+  assert.equal(signed, false)
+})
+
+test('buildSigningMessage: a header field with a line break or an unpaired surrogate is refused, and a well-formed message keeps its bytes', () => {
+  // Each of these would otherwise join to the same text as another intent.
+  assert.throws(() => buildSigningMessage('anchorHash\ninstitutionKid: aaaa', 'bbbb', 'n', 1, {}), KxcoChainError)
+  assert.throws(() => buildSigningMessage('anchorHash', 'aaaa\ninstitutionKid: bbbb', 'n', 1, {}), KxcoChainError)
+  for (const bad of ['a\nb', 'a\rb', '\uD800', 'x\uDBFF', '\uDC00y']) {
+    for (let field = 0; field < 4; field++) {
+      const args = ['anchorHash', 'aa29f37ab7f4b2cf', 'ab'.repeat(32), 1700000000, {}]
+      args[field] = bad
+      assert.throws(
+        () => buildSigningMessage(...args),
+        (err) => err instanceof KxcoChainError && err.code === 'BAD_ARGUMENT',
+        `field ${field}: ${JSON.stringify(bad)}`,
+      )
+    }
+  }
+
+  // A surrogate pair is a character, not an unpaired half, and passes as it did.
+  const bytes = buildSigningMessage('anchorHash', 'aa29f37ab7f4b2cf', 'ab'.repeat(32), 1700000000,
+    { purpose: 'café 😀', hash: 'line\nbreak' })
+  assert.equal(Buffer.from(bytes).toString('utf8'), [
+    'kxco-relay-v1',
+    'operation: anchorHash',
+    'institutionKid: aa29f37ab7f4b2cf',
+    `nonce: ${'ab'.repeat(32)}`,
+    'timestamp: 1700000000',
+    'payload: {"hash":"line\\nbreak","purpose":"café 😀"}',
+  ].join('\n'))
 })
 
 // ── error handling ────────────────────────────────────────────────────────────

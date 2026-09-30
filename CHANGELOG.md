@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.7
+
+canonicalize refuses an object key named `__proto__`, and buildSigningMessage
+refuses a header field holding a line break or an unpaired surrogate, both as
+`BAD_ARGUMENT`. The constructor refuses a relay that is not a string as
+`BAD_CONFIG`. Well-formed messages are byte-identical to before. RELAY.md lists
+these refusals.
+
 ## 2.1.6
 
 Documentation. No source change.

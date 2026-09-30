@@ -92,6 +92,7 @@ export class KxcoChain {
     verifiedPath,
   } = {}) {
     if (!relay) throw new KxcoChainError('relay URL is required', { code: 'BAD_CONFIG' })
+    if (typeof relay !== 'string') throw new KxcoChainError('relay must be a URL string', { code: 'BAD_CONFIG' })
     if (!identity) throw new KxcoChainError('identity is required', { code: 'BAD_CONFIG' })
 
     if (licenceHeader !== 'authorization' && licenceHeader !== 'x-kxco-licence') {
