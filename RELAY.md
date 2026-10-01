@@ -45,7 +45,7 @@ One endpoint, one method. The operation is in the body, not the path, because th
 }
 ```
 
-No other top-level fields are ever sent. In particular there is **no** gas price, gas limit, wallet address, `from`, private key or ARMR anywhere in an intent — the client's test suite asserts this on every operation. An institution never holds ARMR and never runs a node.
+No other top-level fields are ever sent. In particular there is **no** gas price, gas limit, wallet address, `from`, private key or ARMR anywhere in an intent. The client's test suite asserts this on every operation. An institution never holds ARMR and never runs a node.
 
 ### Signing message
 
@@ -114,7 +114,7 @@ The client turns `401` and `403` into `KxcoChainError` with code `LICENCE_REJECT
 
 **`chainId` is required.** The client rejects a response without it (`MISSING_CHAIN_ID`) and rejects a response naming any other chain (`WRONG_CHAIN`). A caller is about to store that transaction hash as proof that something is on Armature L1; handing back a hash from somewhere else would be worse than failing.
 
-`strictChainId: false` relaxes the first check for a relay that predates the field. It does not relax the second — a wrong chain id always throws — and it does not invent the answer: the result then carries `chainIdConfirmed: false`, so a caller storing it as proof can tell that the relay never said.
+`strictChainId: false` relaxes the first check for a relay that predates the field. It does not relax the second (a wrong chain id always throws), and it does not invent the answer: the result then carries `chainIdConfirmed: false`, so a caller storing it as proof can tell that the relay never said.
 
 `txHash` must be `0x` followed by 64 hex characters and `blockNumber` a non-negative integer. The client validates both and throws `BAD_RELAY_RESPONSE` otherwise, so a relay bug is named at the relay rather than surfacing later as an envelope that will not verify.
 
@@ -157,14 +157,14 @@ The write path above is this package. The read side is `kxco-pq-network`:
 GET /kids/:kid        on https://chain.kxco.ai
 ```
 
-A relay write and the registry read must agree. After a successful `revokeKid`, `GET /kids/<kid>` must report `status: "revoked"` — otherwise `anchored+live` verification will keep accepting a key the chain says is dead. See the registry contract in [`kxco-pq-network`](https://www.npmjs.com/package/kxco-pq-network).
+A relay write and the registry read must agree. After a successful `revokeKid`, `GET /kids/<kid>` must report `status: "revoked"`. Otherwise `anchored+live` verification will keep accepting a key the chain says is dead. See the registry contract in [`kxco-pq-network`](https://www.npmjs.com/package/kxco-pq-network).
 
-**Measured 3 September 2026, so it is not guessed at:**
+**Measured 3 September 2026, and the registry row again on 1 October 2026, so it is not guessed at:**
 
 | Endpoint | State |
 |---|---|
 | `POST https://relay.kxco.ai/intents` | **live.** An empty body returns `400 {"ok":false,"code":"INVALID_INTENT","error":"missing required fields"}`, and `GET /health` returns `{"ok":true}`. The error shape above matches what it actually sends |
-| `GET https://chain.kxco.ai/kids/:kid` | **implemented, not yet deployed.** The live host still serves the marketing site's HTML 404 |
+| `GET https://chain.kxco.ai/kids/:kid` | **live, read from the chain.** A registered institution kid returns `200 {"status":"active","kind":"institution","chainId":1111111,"asOfBlock":…}`, an unregistered kid `404 {"status":"unknown","rotationHistoryComplete":false,…}`, and a malformed one `400 {"error":"bad_kid"}`. No key had been revoked or rotated on chain by 1 October, so neither answer has been observed live yet |
 
 ### chainId: read the relay source, not a guess
 
@@ -172,7 +172,7 @@ The deployed relay's `send()` returned `{ txHash, blockNumber }` and **no `chain
 
 `kxco-relay/src/lib/chain.js` now reads the chain id from its provider at startup and includes it in every response. It is read from the network rather than hard-coded, so a relay pointed at the wrong RPC reports the chain it is really writing to; if it cannot be determined the field is omitted rather than invented.
 
-**Both sides have to ship together.** A `kxco-pq-chain` 2.0.0 talking to a relay that predates this change fails closed on every write. If you upgrade the client first, set `strictChainId: false` until the relay is deployed — the result then carries `chainIdConfirmed: false` so nothing pretends the chain was verified.
+**Both sides have to ship together.** A `kxco-pq-chain` 2.0.0 talking to a relay that predates this change fails closed on every write. If you upgrade the client first, set `strictChainId: false` until the relay is deployed. The result then carries `chainIdConfirmed: false`, so nothing claims a chain id the relay never reported.
 
 The registry read side is implemented in `kxco-chain-live/explorer-public` and verified end to end against a scripted chain, but is likewise not deployed. Until it is, `anchored+live` fails closed against production.
 

@@ -369,7 +369,7 @@ Dependency audit history is recorded in [AUDIT.md](https://github.com/Knightsbri
 
 On the verified path the signature covers the verifying contract, the chain id, the operation, the key id, a sequential on-chain nonce and every argument, so an intent cannot be replayed, sent to another chain or given different arguments and still verify. The licence key is never readable from the client, and a usage event carries only its first 8 characters.
 
-To report a vulnerability, email **security@kxco.ai**.
+To report a vulnerability, use [private vulnerability reporting](https://github.com/KnightsbridgeAIQ/kxco-pq-chain/security/advisories/new) on this repository, or email **admin@kxco.ai**.
 
 ## License
 
