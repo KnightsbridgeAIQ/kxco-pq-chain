@@ -17,6 +17,12 @@ validation, and the block records that **you** authorised it. Anyone who syncs
 the chain re-executes that check, so a counterparty confirms your anchor from
 chain data without an API key and without asking us.
 
+This path verifies **ML-DSA-65** and nothing else: the precompile at 0x0b is
+ML-DSA-65. An identity whose key is ML-DSA-87 never comes here. `KxcoChain`
+sends its intents to the relay as v1.1 (see `RELAY.md`), where the relay
+verifies them off-chain, and the relay refuses an ML-DSA-87 key sent to
+`/intents/v2`.
+
 ---
 
 ## Whose chain this is
