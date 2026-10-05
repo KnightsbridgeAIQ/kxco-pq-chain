@@ -23,7 +23,7 @@
 
 import { OPERATION_TAGS, authorisingMessage, abiEncode } from './intents-v2.js'
 import { toV2 } from './v2-payload.js'
-import { buildIntent } from './intents.js'
+import { buildIntent, algForPublicKey, INTENT_ALGS } from './intents.js'
 import { KxcoChainError } from './errors.js'
 
 /** Armature L1. Not configurable. */
@@ -60,6 +60,7 @@ export class KxcoChain {
   #publicKeyHex
   #v2
   #onUsageEvent
+  #alg
 
   /**
    * @param {object} opts
@@ -90,6 +91,7 @@ export class KxcoChain {
     onUsageEvent,
     publicKeyHex,
     verifiedPath,
+    alg,
   } = {}) {
     if (!relay) throw new KxcoChainError('relay URL is required', { code: 'BAD_CONFIG' })
     if (typeof relay !== 'string') throw new KxcoChainError('relay must be a URL string', { code: 'BAD_CONFIG' })
@@ -119,6 +121,27 @@ export class KxcoChain {
     // undefined = not probed, null = not available on this relay.
     this.#v2 = verifiedPath === false ? null : undefined
 
+    // The KEY decides the parameter set. `alg` (or identity.alg) is for an
+    // identity that does not expose its public key; where one does, a stated
+    // algorithm that disagrees with it is refused rather than believed. A key
+    // of neither length leaves the default, ML-DSA-65, as before.
+    const statedAlg = alg ?? identity.alg
+    if (statedAlg !== undefined && !INTENT_ALGS.includes(statedAlg)) {
+      throw new KxcoChainError(
+        `alg must be one of ${INTENT_ALGS.join(', ')}, got ${JSON.stringify(statedAlg)}`,
+        { code: 'BAD_CONFIG' },
+      )
+    }
+    let keyAlg = null
+    try { keyAlg = this.#publicKeyHex ? algForPublicKey(this.#publicKeyHex) : null } catch { /* neither set */ }
+    if (statedAlg !== undefined && keyAlg !== null && statedAlg !== keyAlg) {
+      throw new KxcoChainError(
+        `alg is ${statedAlg} but this identity's public key is ${keyAlg}`,
+        { code: 'BAD_CONFIG' },
+      )
+    }
+    this.#alg = keyAlg ?? statedAlg ?? 'ML-DSA-65'
+
     // Fail at construction, not at the first write. A service that boots
     // without a licence and only discovers it when the first credential is
     // issued has already told a user their onboarding succeeded.
@@ -138,6 +161,9 @@ export class KxcoChain {
 
   /** Whether a licence key is configured. Never exposes the key itself. */
   get licensed() { return this.#licenceKey !== null }
+
+  /** The ML-DSA parameter set this client signs intents with. */
+  get alg() { return this.#alg }
 
   // ─── identity ────────────────────────────────────────────────────────────
 
@@ -389,13 +415,24 @@ export class KxcoChain {
     // the difference is who the chain records as having authorised the write:
     // the relay, or the institution. Falls back silently to v1 so upgrading
     // this package works against a relay either side of the cutover.
-    const v2Intent = await this.#buildV2(operation, payload)
+    //
+    // ML-DSA-65 only. The chain verifies through the ML-DSA-65 precompile at
+    // 0x0b and has no ML-DSA-87 verifier yet, so an ML-DSA-87 intent never
+    // takes the verified path, is not even probed for it, and goes to the
+    // relay as v1.1, where the relay verifies it off-chain. A relay on a chain
+    // whose legacy path is closed answers that with an error rather than a
+    // write; see RELAY.md.
+    const legacy = this.#alg === 'ML-DSA-65'
+    const v2Intent = legacy ? await this.#buildV2(operation, payload) : null
     const path = v2Intent ? '/intents/v2' : '/intents'
     const intent = v2Intent ?? await buildIntent({
       operation,
       institutionKid: this.#identity.kid,
       payload,
       identity: this.#identity,
+      // ML-DSA-65 stays on the v1 message, so a relay that predates v1.1 keeps
+      // accepting every write it accepts today.
+      ...(legacy ? {} : { alg: this.#alg }),
     })
 
     const ac = new AbortController()

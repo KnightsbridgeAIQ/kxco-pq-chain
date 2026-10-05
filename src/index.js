@@ -1,6 +1,6 @@
 export { KxcoChain, CHAIN_ID, DEFAULT_RELAY_URL } from './client.js'
 export { KxcoChainError } from './errors.js'
-export { buildIntent, buildSigningMessage, randomNonce } from './intents.js'
+export { buildIntent, buildSigningMessage, randomNonce, algForPublicKey, INTENT_ALGS } from './intents.js'
 export { canonicalize }   from './jcs.js'
 
 // ── Phase 3: on-chain verification ────────────────────────────────────────

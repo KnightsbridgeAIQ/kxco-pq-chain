@@ -62,6 +62,49 @@ payload: <RFC 8785 JCS canonical JSON of the payload object>
 
 The payload is canonicalised with JCS (`canonicalize()` in `src/jcs.js`) so key order in the JSON body cannot change what was signed.
 
+### v1.1: ML-DSA-87, with the algorithm in the signed bytes
+
+The v1 message names no algorithm, so it means ML-DSA-65, as every v1 signature
+already issued does. An identity whose key is ML-DSA-87 sends a v1.1 intent: the
+body carries `"alg": "ML-DSA-87"` and the signing message is
+
+```
+kxco-relay-v1.1
+alg: ML-DSA-87
+operation: <name>
+institutionKid: <16-hex kid>
+nonce: <64 hex>
+timestamp: <unix seconds>
+payload: <RFC 8785 JCS canonical JSON of the payload object>
+```
+
+The first line differs from v1, so neither message can be read as the other, and
+the algorithm cannot be changed in transit without breaking the signature. The
+signature is 4627 bytes (9254 hex characters) and the public key 2592 bytes.
+`buildSigningMessage(..., alg)` and `buildIntent({ ..., alg })` produce v1.1;
+without `alg` they produce v1 exactly as before.
+
+`alg` may only be `ML-DSA-65` or `ML-DSA-87`. `KxcoChain` sends v1.1 only for an
+ML-DSA-87 key, so an ML-DSA-65 client keeps sending v1 and a relay that predates
+v1.1 sees no change.
+
+A relay that implements v1.1 lets the **key** decide:
+
+| Condition | Status | `code` |
+|---|---|---|
+| `alg` present and not one of the two sets | `400` | `UNSUPPORTED_ALG` |
+| `alg` disagrees with the parameter set of the key registered for `institutionKid`, or a v1 intent (no `alg`) arrives for an ML-DSA-87 key | `403` | `ALG_MISMATCH` |
+
+It never retries a signature under the other set.
+
+**On-chain verification is ML-DSA-65 only.** Armature L1 verifies through the
+ML-DSA-65 precompile at 0x0b and has no ML-DSA-87 verifier yet, so an ML-DSA-87
+intent never goes to `POST /intents/v2`: the client does not probe for it, and
+the relay refuses one sent there. The relay verifies ML-DSA-87 off-chain on this
+path. On a chain whose legacy path is closed, that verification succeeds but no
+write route exists for it, and the relay says so rather than sending a
+transaction that would revert.
+
 ### What the client refuses before it sends
 
 The client refuses these with `KxcoChainError`, and nothing is signed or sent:

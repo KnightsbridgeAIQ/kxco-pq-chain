@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+**ML-DSA-87 intents.** An identity whose key is ML-DSA-87 signs a v1.1 intent:
+the v1 message under a new first line, `kxco-relay-v1.1`, followed by
+`alg: ML-DSA-87`, so the algorithm is inside the signed bytes. The intent body
+carries `alg` as well. `buildSigningMessage()` and `buildIntent()` take an
+optional `alg`; without it they produce the v1 message and intent byte for byte
+as before, which means ML-DSA-65.
+
+The key decides. `KxcoChain` reads the parameter set from the identity's public
+key (1952 bytes ML-DSA-65, 2592 bytes ML-DSA-87). An `alg` option, or
+`identity.alg`, is used only where no key is exposed, and one that disagrees
+with the key is refused as `BAD_CONFIG`. New exports: `algForPublicKey()` and
+`INTENT_ALGS`. `client.alg` reports the set in use.
+
+An ML-DSA-87 intent never takes the verified path. The chain verifies through
+the ML-DSA-65 precompile at 0x0b and has no ML-DSA-87 verifier yet, so the
+client does not probe for it and sends the intent to `POST /intents`, where the
+relay verifies it off-chain. An ML-DSA-65 client is unchanged: same path, same
+bytes, no `alg` field.
+
+The `kxco-post-quantum` floor is now `^1.6.0`.
+
 ## 2.1.7
 
 canonicalize refuses an object key named `__proto__`, and buildSigningMessage

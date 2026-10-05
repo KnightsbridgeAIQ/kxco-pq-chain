@@ -16,7 +16,23 @@ export interface RelayIntent {
   timestamp:      number
   payload:        Record<string, unknown>
   signature:      string
+  /**
+   * Present only on a v1.1 intent, whose signed bytes name the same
+   * algorithm. Absent means v1, which is ML-DSA-65.
+   */
+  alg?:           IntentAlg
 }
+
+/** The ML-DSA parameter sets an intent may name. */
+export type IntentAlg = 'ML-DSA-65' | 'ML-DSA-87'
+
+export const INTENT_ALGS: readonly IntentAlg[]
+
+/**
+ * The parameter set a public key belongs to, decided by its length (1952
+ * bytes for ML-DSA-65, 2592 for ML-DSA-87). Throws `BAD_ARGUMENT` otherwise.
+ */
+export function algForPublicKey(publicKey: Uint8Array | string): IntentAlg
 
 export interface RelayResult {
   /** Validated as 0x + 64 hex. A malformed hash throws `BAD_RELAY_RESPONSE`. */
@@ -47,7 +63,7 @@ export interface KxcoChainOptions {
   /** Relay base URL. Defaults to https://relay.kxco.ai */
   relay?:     string
   /** KxcoIdentity from kxco-pq-sdk — must have .kid (string) and .sign(Uint8Array) */
-  identity:   { kid: string; sign(message: Uint8Array): Promise<Uint8Array>; publicKeyHex?: string; publicKey?: Uint8Array }
+  identity:   { kid: string; sign(message: Uint8Array): Promise<Uint8Array>; publicKeyHex?: string; publicKey?: Uint8Array; alg?: IntentAlg }
   /**
    * This identity's ML-DSA public key, hex, no 0x.
    *
@@ -63,6 +79,17 @@ export interface KxcoChainOptions {
    * institution authorised it.
    */
   verifiedPath?: false
+  /**
+   * The identity's ML-DSA parameter set, for an identity that does not expose
+   * its public key. The key decides: where the public key is known its length
+   * sets this, and a stated value that disagrees throws `BAD_CONFIG`. Default
+   * ML-DSA-65.
+   *
+   * An ML-DSA-87 client never takes the verified path (the chain verifies
+   * ML-DSA-65 only, at precompile 0x0b) and sends v1.1 intents to
+   * `POST /intents`, which the relay verifies off-chain.
+   */
+  alg?:       IntentAlg
   timeout?:   number
   /**
    * Required for writes to a hosted relay. Falls back to `KXCO_LICENCE_KEY`
@@ -145,6 +172,8 @@ export class KxcoChain {
   readonly relay: string
   /** Whether a licence key is configured. Never exposes the key. */
   readonly licensed: boolean
+  /** The ML-DSA parameter set this client signs intents with. */
+  readonly alg: IntentAlg
 
   registerInstitution(opts: RegisterInstitutionOpts): Promise<RelayResult>
   /** The same wire operation as `registerInstitution`. */
@@ -185,6 +214,8 @@ export function buildSigningMessage(
   nonce:          string,
   timestamp:      number,
   payload:        Record<string, unknown>,
+  /** Omitted: the v1 message (ML-DSA-65), unchanged. Given: v1.1, naming it. */
+  alg?:           IntentAlg,
 ): Uint8Array
 
 export function randomNonce(): string
@@ -194,6 +225,8 @@ export function buildIntent(opts: {
   institutionKid: string
   payload:        Record<string, unknown>
   identity:       { kid: string; sign(message: Uint8Array): Promise<Uint8Array> }
+  /** Omitted: a v1 intent. Given: v1.1, with `alg` in the body and the signed bytes. */
+  alg?:           IntentAlg
 }): Promise<RelayIntent>
 
 export function canonicalize(value: unknown): string
