@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 2.2.0
 **ML-DSA-87 intents.** An identity whose key is ML-DSA-87 signs a v1.1 intent:
 the v1 message under a new first line, `kxco-relay-v1.1`, followed by
 `alg: ML-DSA-87`, so the algorithm is inside the signed bytes. The intent body
