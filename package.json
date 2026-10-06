@@ -73,7 +73,7 @@
     "kxco-post-quantum": "^1.6.0"
   },
   "scripts": {
-    "test": "node --test --test-timeout=30000 test/chain.test.js test/licence.test.js test/verified-path.test.js test/property.test.js test/ml-dsa-87.test.js test/ml-dsa-87-verified.test.js",
+    "test": "node --test --test-timeout=30000 test/chain.test.js test/licence.test.js test/verified-path.test.js test/property.test.js test/ml-dsa-87.test.js test/ml-dsa-87-verified.test.js test/verifier-rediscovery.test.js",
     "evidence": "node scripts/build-evidence.mjs"
   },
   "funding": "https://kxco.ai",

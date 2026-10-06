@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+**A long-running client follows a change of verifier.** On the verified path
+the signed message names the verifier contract, and the registry can move to
+another verifier with one transaction (`setRelay`). Up to 2.3.0 a `KxcoChain`
+instance asked the relay for that address once and kept the answer for its
+whole life; the five-minute expiry of the shared cache only helped new
+instances. So after a move, a process that keeps one client (a heartbeat, an
+anchoring service) went on signing for the old verifier with a nonce read from
+the new one, and every write was refused `BAD_SIGNATURE` until the process
+restarted or the registry moved back.
+
+- A client's own answer now expires with the shared one, five minutes after it
+  was fetched.
+- A verified-path write refused `BAD_SIGNATURE`, `BAD_NONCE` or
+  `ALG_NOT_VERIFIED_ON_CHAIN`, each of which a stale verifier can cause, makes
+  the client forget the verifier (its own answer and the process-wide one), ask
+  the relay again, re-read the nonce, re-sign and send once more. Once only, and
+  only for a 4xx refusal carrying no transaction hash, which the relay returns
+  before it sends anything, so the refused intent's nonce was never used and at
+  most one write lands. Any other refusal, a 5xx, a timeout or a lost connection
+  is returned as before and never retried.
+- The same the other way: v1 sent because the last answer said the verified
+  path was not there for this key (before a cutover, or before ML-DSA-87
+  switched on), refused `410 USE_VERIFIED_PATH` before any send, is retried once
+  the same way. A client constructed with `verifiedPath: false` is not.
+- A discovery probe that fails (no connection, a timeout, or a 5xx other than
+  `503 VERIFIED_PATH_UNAVAILABLE`) is no longer remembered by the client. Before,
+  a client whose first probe failed stayed on v1 for its whole life; now the next
+  write asks again. A relay's own `503 VERIFIED_PATH_UNAVAILABLE` is still
+  believed for five minutes.
+
+When nothing changes, the only difference on the wire is one
+`GET /intents/v2/params` per relay every five minutes. No API change.
+
 ## 2.3.0
 **ML-DSA-87 on the verified path.** Where a relay's verifier checks ML-DSA-87
 on-chain (PQVerifyingRelayV2) and `GET /intents/v2/params` lists `ML-DSA-87`

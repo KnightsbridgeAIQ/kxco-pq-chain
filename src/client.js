@@ -52,6 +52,32 @@ function isLoopback(url) {
 const DISCOVERY = new Map()
 const DISCOVERY_TTL_MS = 5 * 60_000
 
+// Refusals that a stale answer about the relay's verifier can cause, by path.
+//
+// POST /intents/v2: the verifier's address is inside the signed bytes, and the
+// registry can move to another verifier with one transaction (setRelay), after
+// which every signature naming the old one fails BAD_SIGNATURE. BAD_NONCE is a
+// nonce read from one verifier, or before another writer used it.
+// ALG_NOT_VERIFIED_ON_CHAIN is an ML-DSA-87 intent signed for a verifier that
+// has since been replaced by one that checks ML-DSA-65 only.
+//
+// POST /intents: USE_VERIFIED_PATH is v1 sent because the last answer said the
+// verified path was not there for this key, to a relay that says it now is (a
+// cutover, or ML-DSA-87 switching on).
+//
+// The relay returns each of these from its pre-send checks, with a 4xx and no
+// transaction hash, so nothing reached the chain.
+const STALE_REFUSALS = Object.freeze({
+  '/intents/v2': new Set(['BAD_SIGNATURE', 'BAD_NONCE', 'ALG_NOT_VERIFIED_ON_CHAIN']),
+  '/intents': new Set(['USE_VERIFIED_PATH']),
+})
+
+function staleVerifierRefusal(path, status, body) {
+  return status >= 400 && status < 500 &&
+    body?.ok === false && body.txHash === undefined &&
+    STALE_REFUSALS[path]?.has(body.code) === true
+}
+
 export class KxcoChain {
   #relay
   #identity
@@ -61,6 +87,7 @@ export class KxcoChain {
   #requireLicence
   #strictChainId
   #publicKeyHex
+  #verifiedPath
   #v2
   #onUsageEvent
   #alg
@@ -121,8 +148,11 @@ export class KxcoChain {
     // SDK's KxcoIdentity; pass it explicitly for any other implementation.
     this.#publicKeyHex = publicKeyHex ?? identity.publicKeyHex ??
       (identity.publicKey ? Buffer.from(identity.publicKey).toString('hex') : null)
-    // undefined = not probed, null = not available on this relay.
-    this.#v2 = verifiedPath === false ? null : undefined
+    // false pins this client to v1 for its lifetime. Otherwise #v2 is
+    // undefined until probed, then { at, value } where value null means not
+    // available on this relay. It expires with the shared cache entry.
+    this.#verifiedPath = verifiedPath !== false
+    this.#v2 = undefined
 
     // The KEY decides the parameter set. `alg` (or identity.alg) is for an
     // identity that does not expose its public key; where one does, a stated
@@ -330,23 +360,29 @@ export class KxcoChain {
   }
 
   /**
-   * Does this relay verify on-chain?
+   * Does this relay verify on-chain, and through which verifier?
    *
-   * Asked once and cached. A relay that has not cut over answers 503 and the
-   * client stays on v1, so upgrading this package is safe against either.
+   * Cached for DISCOVERY_TTL_MS. A relay that has not cut over answers 503 and
+   * the client stays on v1, so upgrading this package is safe against either.
    */
   async #discoverV2() {
-    if (this.#v2 !== undefined) return this.#v2
+    if (!this.#verifiedPath) return null
+
+    // This client's own answer expires on the same TTL as the shared one. It
+    // used to be kept for the life of the client, so a long-running process
+    // went on signing for a verifier the registry had already replaced.
+    if (this.#v2 && Date.now() - this.#v2.at < DISCOVERY_TTL_MS) return this.#v2.value
 
     // Cached per relay URL, not per client. Constructing a client per write is
     // a common and reasonable pattern, and a probe on every one of them would
     // double the request count for no new information. A TTL rather than
-    // forever, so a relay that cuts over later is picked up by a long-running
-    // process without a restart.
+    // forever, so a relay that cuts over later, or moves to another verifier,
+    // is picked up by a long-running process without a restart. Adopted with
+    // the shared entry's time, so both expire together.
     const hit = DISCOVERY.get(this.#relay)
     if (hit && Date.now() - hit.at < DISCOVERY_TTL_MS) {
-      this.#v2 = hit.value
-      return this.#v2
+      this.#v2 = hit
+      return hit.value
     }
 
     try {
@@ -359,7 +395,14 @@ export class KxcoChain {
         signal: AbortSignal.timeout(Math.min(this.#timeout, 3_000)),
       })
       const body = await res.json().catch(() => null)
-      this.#v2 = res.ok && body?.ok && body.verifyingRelay
+      // A 5xx that is not the relay saying it has not cut over is a probe that
+      // failed, not an answer: a proxy whose relay is restarting, or a relay
+      // that could not read the chain. Treated as one that could not connect.
+      if (res.status >= 500 && body?.code !== 'VERIFIED_PATH_UNAVAILABLE') {
+        this.#v2 = undefined
+        return null
+      }
+      const value = res.ok && body?.ok && body.verifyingRelay
         ? {
             verifyingRelay: body.verifyingRelay,
             chainId: body.chainId ?? CHAIN_ID,
@@ -368,15 +411,28 @@ export class KxcoChain {
             algorithms: Array.isArray(body.algorithms) ? body.algorithms : ['ML-DSA-65'],
           }
         : null
-      DISCOVERY.set(this.#relay, { at: Date.now(), value: this.#v2 })
+      this.#v2 = { at: Date.now(), value }
+      DISCOVERY.set(this.#relay, this.#v2)
+      return value
     } catch {
       // A relay that cannot be asked is treated as v1. Guessing the other way
       // would send a verified intent that the relay cannot process at all.
-      // Deliberately NOT cached: a transient failure must not pin every client
-      // in this process to v1 for the whole TTL.
-      this.#v2 = null
+      // Deliberately NOT cached, here or in the shared map: a transient failure
+      // must not pin this client, or every client in this process, to v1.
+      this.#v2 = undefined
+      return null
     }
-    return this.#v2
+  }
+
+  /**
+   * Forget what this client and every client in this process know about the
+   * relay's verifier, so the next discovery asks the relay. Synchronous, and
+   * followed with no await by that discovery's cache check, so no other
+   * client can put an answer back in between.
+   */
+  #forgetVerifier() {
+    this.#v2 = undefined
+    DISCOVERY.delete(this.#relay)
   }
 
   /** The contract's current nonce for this identity. Not guessable. */
@@ -474,59 +530,20 @@ export class KxcoChain {
   }
 
   async #send(operation, payload, meta = {}, extra = {}) {
-    // Prefer the verified path where the relay offers it. Same public API, and
-    // the difference is who the chain records as having authorised the write:
-    // the relay, or the institution. Falls back silently to v1 so upgrading
-    // this package works against a relay either side of the cutover.
-    //
-    // An ML-DSA-87 identity takes the verified path where the relay lists
-    // ML-DSA-87 among the algorithms its verifier checks on-chain, and signs
-    // the message that names ML-DSA-87. Where it does not, the intent goes to
-    // the relay as v1.1, which the relay verifies off-chain; a relay on a
-    // chain whose legacy path is closed answers that with an error rather
-    // than a write. See RELAY.md and VERIFIED-PATH.md.
-    const legacy = this.#alg === 'ML-DSA-65'
-    const v2Intent = await this.#buildV2(operation, payload, extra)
-    const path = v2Intent ? '/intents/v2' : '/intents'
-    const intent = v2Intent ?? await buildIntent({
-      operation,
-      institutionKid: this.#identity.kid,
-      payload,
-      identity: this.#identity,
-      // ML-DSA-65 stays on the v1 message, so a relay that predates v1.1 keeps
-      // accepting every write it accepts today.
-      ...(legacy ? {} : { alg: this.#alg }),
-    })
+    let attempt = await this.#post(operation, payload, extra)
 
-    const ac = new AbortController()
-    const tid = setTimeout(() => ac.abort(), this.#timeout)
-
-    let response
-    try {
-      response = await fetch(`${this.#relay}${path}`, {
-        method: 'POST',
-        headers: this.#headers(),
-        body: JSON.stringify(intent),
-        signal: ac.signal,
-      })
-    } catch (err) {
-      clearTimeout(tid)
-      if (err.name === 'AbortError') {
-        throw new KxcoChainError(`relay request timed out after ${this.#timeout}ms`, { code: 'TIMEOUT' })
-      }
-      throw new KxcoChainError(`relay request failed: ${err.message}`, { code: 'NETWORK_ERROR' })
+    // A refusal that a stale answer about the verifier can cause: forget the
+    // verifier here and process-wide, ask the relay again, re-read the nonce,
+    // re-sign and send once more. Once, never in a loop, and only for a refusal
+    // the relay returned before sending anything (staleVerifierRefusal), so the
+    // first intent's nonce was never consumed and at most one write lands. The
+    // answer to the second attempt is returned as it is, whatever it says. A
+    // client pinned to v1 (verifiedPath false) would only resend the same v1.
+    if (this.#verifiedPath && staleVerifierRefusal(attempt.path, attempt.response.status, attempt.body)) {
+      this.#forgetVerifier()
+      attempt = await this.#post(operation, payload, extra)
     }
-    clearTimeout(tid)
-
-    let body
-    try {
-      body = await response.json()
-    } catch {
-      throw new KxcoChainError('relay returned non-JSON response', {
-        code: 'PARSE_ERROR',
-        status: response.status,
-      })
-    }
+    const { response, body } = attempt
 
     // 401 and 403 are the licence answers. Naming them is worth a line: a
     // caller reading "relay error 401" has to go and find out what the relay
@@ -598,5 +615,67 @@ export class KxcoChain {
     }
     this.#emit(operation, meta, result)
     return result
+  }
+
+  /**
+   * Build, sign and POST one intent. Returns the relay's parsed answer without
+   * judging it; a transport failure or a non-JSON answer throws.
+   */
+  async #post(operation, payload, extra) {
+    // Prefer the verified path where the relay offers it. Same public API, and
+    // the difference is who the chain records as having authorised the write:
+    // the relay, or the institution. Falls back silently to v1 so upgrading
+    // this package works against a relay either side of the cutover.
+    //
+    // An ML-DSA-87 identity takes the verified path where the relay lists
+    // ML-DSA-87 among the algorithms its verifier checks on-chain, and signs
+    // the message that names ML-DSA-87. Where it does not, the intent goes to
+    // the relay as v1.1, which the relay verifies off-chain; a relay on a
+    // chain whose legacy path is closed answers that with an error rather
+    // than a write. See RELAY.md and VERIFIED-PATH.md.
+    const legacy = this.#alg === 'ML-DSA-65'
+    const v2Intent = await this.#buildV2(operation, payload, extra)
+    const path = v2Intent ? '/intents/v2' : '/intents'
+    const intent = v2Intent ?? await buildIntent({
+      operation,
+      institutionKid: this.#identity.kid,
+      payload,
+      identity: this.#identity,
+      // ML-DSA-65 stays on the v1 message, so a relay that predates v1.1 keeps
+      // accepting every write it accepts today.
+      ...(legacy ? {} : { alg: this.#alg }),
+    })
+
+    const ac = new AbortController()
+    const tid = setTimeout(() => ac.abort(), this.#timeout)
+
+    let response
+    try {
+      response = await fetch(`${this.#relay}${path}`, {
+        method: 'POST',
+        headers: this.#headers(),
+        body: JSON.stringify(intent),
+        signal: ac.signal,
+      })
+    } catch (err) {
+      clearTimeout(tid)
+      if (err.name === 'AbortError') {
+        throw new KxcoChainError(`relay request timed out after ${this.#timeout}ms`, { code: 'TIMEOUT' })
+      }
+      throw new KxcoChainError(`relay request failed: ${err.message}`, { code: 'NETWORK_ERROR' })
+    }
+    clearTimeout(tid)
+
+    let body
+    try {
+      body = await response.json()
+    } catch {
+      throw new KxcoChainError('relay returned non-JSON response', {
+        code: 'PARSE_ERROR',
+        status: response.status,
+      })
+    }
+
+    return { path, response, body }
   }
 }
