@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 2.3.0
 **ML-DSA-87 on the verified path.** Where a relay's verifier checks ML-DSA-87
 on-chain (PQVerifyingRelayV2) and `GET /intents/v2/params` lists `ML-DSA-87`
 in `algorithms`, an ML-DSA-87 identity now writes through `POST /intents/v2`
