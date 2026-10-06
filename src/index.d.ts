@@ -85,9 +85,10 @@ export interface KxcoChainOptions {
    * sets this, and a stated value that disagrees throws `BAD_CONFIG`. Default
    * ML-DSA-65.
    *
-   * An ML-DSA-87 client never takes the verified path (the chain verifies
-   * ML-DSA-65 only, at precompile 0x0b) and sends v1.1 intents to
-   * `POST /intents`, which the relay verifies off-chain.
+   * An ML-DSA-87 client takes the verified path where the relay lists
+   * ML-DSA-87 in `GET /intents/v2/params` `algorithms`, and signs the message
+   * that names ML-DSA-87. Elsewhere it sends v1.1 intents to `POST /intents`,
+   * which the relay verifies off-chain.
    */
   alg?:       IntentAlg
   timeout?:   number
@@ -164,6 +165,13 @@ export interface AnchorAttestationOpts {
 export interface RotateKeyOpts {
   newKid:          string
   newPublicKeyHex: string
+  /**
+   * The holder of the new key. Required on the verified path, where the chain
+   * checks the new key's signature over the same message as the old key's
+   * (proof of possession); throws `NEW_KEY_SIGNER_REQUIRED` there without it.
+   * Not used on v1.
+   */
+  newIdentity?:    { sign(message: Uint8Array): Promise<Uint8Array>; publicKeyHex?: string; publicKey?: Uint8Array }
 }
 
 export class KxcoChain {

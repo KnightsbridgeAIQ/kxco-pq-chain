@@ -31,6 +31,9 @@ export const CHAIN_ID = 1111111
 
 export const DEFAULT_RELAY_URL = 'https://relay.kxco.ai'
 
+/** Signature length in bytes, per parameter set (FIPS 204). */
+const SIGNATURE_BYTES = Object.freeze({ 'ML-DSA-65': 3309, 'ML-DSA-87': 4627 })
+
 // A relay on the loopback interface is a mock or a local node, so a licence is
 // not required to talk to it. Anything else is treated as hosted, because the
 // failure that matters is shipping to production with no licence configured,
@@ -186,10 +189,21 @@ export class KxcoChain {
 
   /**
    * Record an institution key rotation on-chain.
-   * @param {{ newKid: string, newPublicKeyHex: string }} opts
+   *
+   * On the verified path the chain checks two signatures over one message:
+   * this identity's (the old key authorises) and the new key's (proof of
+   * possession). So `newIdentity`, the holder of the new key, is required
+   * there; it signs exactly the bytes this identity signs. Either key may be
+   * ML-DSA-65 or ML-DSA-87, which is how an ML-DSA-65 institution moves to
+   * ML-DSA-87. On v1 the relay records the rotation on this identity's
+   * signature alone and `newIdentity` is not used.
+   *
+   * @param {{ newKid: string, newPublicKeyHex: string,
+   *           newIdentity?: { sign(message: Uint8Array): Promise<Uint8Array>,
+   *                           publicKeyHex?: string, publicKey?: Uint8Array } }} opts
    */
-  async rotateKey({ newKid, newPublicKeyHex }) {
-    return this.#send('rotateKey', { newKid, newPublicKeyHex }, { kid: newKid })
+  async rotateKey({ newKid, newPublicKeyHex, newIdentity }) {
+    return this.#send('rotateKey', { newKid, newPublicKeyHex }, { kid: newKid }, { newIdentity })
   }
 
   /**
@@ -346,7 +360,13 @@ export class KxcoChain {
       })
       const body = await res.json().catch(() => null)
       this.#v2 = res.ok && body?.ok && body.verifyingRelay
-        ? { verifyingRelay: body.verifyingRelay, chainId: body.chainId ?? CHAIN_ID }
+        ? {
+            verifyingRelay: body.verifyingRelay,
+            chainId: body.chainId ?? CHAIN_ID,
+            // The sets this relay's verifier checks on-chain now. A relay that
+            // predates the field verifies ML-DSA-65 only.
+            algorithms: Array.isArray(body.algorithms) ? body.algorithms : ['ML-DSA-65'],
+          }
         : null
       DISCOVERY.set(this.#relay, { at: Date.now(), value: this.#v2 })
     } catch {
@@ -379,9 +399,12 @@ export class KxcoChain {
    * Build and sign a v2 intent, or return null if this call cannot take the
    * verified path and should fall back to v1.
    */
-  async #buildV2(operation, payload) {
+  async #buildV2(operation, payload, { newIdentity } = {}) {
     const v2 = await this.#discoverV2()
     if (!v2) return null
+    // An ML-DSA-87 identity takes this path only where the relay says its
+    // verifier checks ML-DSA-87 now. Otherwise v1.1, verified by the relay.
+    if (!v2.algorithms.includes(this.#alg)) return null
 
     const mapped = toV2(operation, payload)
     if (!mapped) return null            // operation has no verified form
@@ -397,33 +420,73 @@ export class KxcoChain {
 
     const kid = this.#identity.kid
     const nonce = operation === 'registerInstitution' ? 0 : await this.#nonce(kid)
+    const legacy = this.#alg === 'ML-DSA-65'
     const message = authorisingMessage({
       relayAddress: v2.verifyingRelay,
       operationTag: OPERATION_TAGS[operation === 'rotateKey' ? 'rotateInstitutionKey' : operation],
       kid, nonce, args: mapped.args, chainId: v2.chainId,
+      // ML-DSA-65 builds the message exactly as before; ML-DSA-87 names itself.
+      ...(legacy ? {} : { alg: this.#alg }),
     })
     const signature = Buffer.from(await this.#identity.sign(message)).toString('hex')
 
+    // A rotation carries the new key's signature over the same bytes.
+    const body = operation === 'rotateKey'
+      ? { ...mapped.body, newSignature: await this.#signAsNewKey(newIdentity, payload.newPublicKeyHex, message) }
+      : mapped.body
+
     return {
       operation, institutionKid: kid, publicKeyHex: this.#publicKeyHex,
-      signature, nonce, payload: mapped.body,
+      signature, nonce, payload: body,
+      // Only for ML-DSA-87, so an ML-DSA-65 intent carries the fields it did.
+      ...(legacy ? {} : { alg: this.#alg }),
     }
   }
 
-  async #send(operation, payload, meta = {}) {
+  /**
+   * The new key's signature over the rotation message, refused before anything
+   * is sent if the signer is missing, holds a different key, or signs with the
+   * other parameter set, each of which the chain would reject after gas.
+   */
+  async #signAsNewKey(newIdentity, newPublicKeyHex, message) {
+    if (typeof newIdentity?.sign !== 'function') {
+      throw new KxcoChainError(
+        `${this.#relay} verifies rotations on-chain, which needs the NEW key's signature as ` +
+        'well as this one. Pass newIdentity (the holder of the new key, with sign()) to rotateKey.',
+        { code: 'NEW_KEY_SIGNER_REQUIRED' },
+      )
+    }
+    const exposed = newIdentity.publicKeyHex ??
+      (newIdentity.publicKey ? Buffer.from(newIdentity.publicKey).toString('hex') : null)
+    const wanted = String(newPublicKeyHex).replace(/^0x/, '').toLowerCase()
+    if (exposed !== null && String(exposed).replace(/^0x/, '').toLowerCase() !== wanted) {
+      throw new KxcoChainError('newIdentity holds a different key from newPublicKeyHex', { code: 'BAD_ARGUMENT' })
+    }
+    const set = algForPublicKey(wanted)
+    const signature = Buffer.from(await newIdentity.sign(message))
+    if (signature.length !== SIGNATURE_BYTES[set]) {
+      throw new KxcoChainError(
+        `newIdentity signed ${signature.length} bytes, but the new key is ${set} (${SIGNATURE_BYTES[set]})`,
+        { code: 'BAD_ARGUMENT' },
+      )
+    }
+    return signature.toString('hex')
+  }
+
+  async #send(operation, payload, meta = {}, extra = {}) {
     // Prefer the verified path where the relay offers it. Same public API, and
     // the difference is who the chain records as having authorised the write:
     // the relay, or the institution. Falls back silently to v1 so upgrading
     // this package works against a relay either side of the cutover.
     //
-    // ML-DSA-65 only. The chain verifies through the ML-DSA-65 precompile at
-    // 0x0b and has no ML-DSA-87 verifier yet, so an ML-DSA-87 intent never
-    // takes the verified path, is not even probed for it, and goes to the
-    // relay as v1.1, where the relay verifies it off-chain. A relay on a chain
-    // whose legacy path is closed answers that with an error rather than a
-    // write; see RELAY.md.
+    // An ML-DSA-87 identity takes the verified path where the relay lists
+    // ML-DSA-87 among the algorithms its verifier checks on-chain, and signs
+    // the message that names ML-DSA-87. Where it does not, the intent goes to
+    // the relay as v1.1, which the relay verifies off-chain; a relay on a
+    // chain whose legacy path is closed answers that with an error rather
+    // than a write. See RELAY.md and VERIFIED-PATH.md.
     const legacy = this.#alg === 'ML-DSA-65'
-    const v2Intent = legacy ? await this.#buildV2(operation, payload) : null
+    const v2Intent = await this.#buildV2(operation, payload, extra)
     const path = v2Intent ? '/intents/v2' : '/intents'
     const intent = v2Intent ?? await buildIntent({
       operation,

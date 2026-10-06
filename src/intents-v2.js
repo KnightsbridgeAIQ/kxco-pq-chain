@@ -26,6 +26,22 @@
 // ±5 minute window: the chain already orders transactions, and a nonce cannot
 // be satisfied twice.
 //
+// ── ML-DSA-87 ───────────────────────────────────────────────────────────────
+//
+// PQVerifyingRelayV2 verifies ML-DSA-87 as well, and the key's length decides
+// which. An ML-DSA-65 key signs the bytes above, unchanged. An ML-DSA-87 key
+// signs the same prefix with keccak256("ML-DSA-87") as a sixth word, after the
+// nonce, so the algorithm is inside the signed bytes:
+//
+//   abi.encodePacked(
+//     abi.encode(relayAddress, chainId, operationTag, kid, nonce, ALG_ML_DSA_87),
+//     abi.encode(...operation arguments)
+//   )
+//
+// A rotation is signed by the old and the new key over one message. Its prefix
+// follows the old key, and its arguments carry keccak256("ML-DSA-87") as a
+// third word when the NEW key is ML-DSA-87.
+//
 // ── On getting this exactly right ───────────────────────────────────────────
 //
 // One wrong byte here produces a signature the contract rejects, and the
@@ -35,7 +51,7 @@
 // encoder is not trusted because it looks right; it is checked against the
 // thing that will judge it.
 
-import { mlDsa, fingerprint } from 'kxco-post-quantum'
+import { mlDsa, mlDsa87, fingerprint } from 'kxco-post-quantum'
 import { keccak_256 } from '@noble/hashes/sha3.js'
 import { utf8ToBytes } from '@noble/hashes/utils.js'
 
@@ -186,6 +202,29 @@ export async function fetchOperationTags(ethCall) {
   return tags
 }
 
+// ── algorithms ──────────────────────────────────────────────────────────────
+
+/**
+ * keccak256 of each parameter set's name, as PQVerifyingRelayV2's
+ * `algorithmTags()` returns them. Only the ML-DSA-87 tag is ever signed.
+ */
+export const ALGORITHM_TAGS = Object.freeze({
+  'ML-DSA-65': '0x' + Buffer.from(keccak_256(utf8ToBytes('ML-DSA-65'))).toString('hex'),
+  'ML-DSA-87': '0x' + Buffer.from(keccak_256(utf8ToBytes('ML-DSA-87'))).toString('hex'),
+})
+
+/** Signer and public key length per parameter set. The wrapper, never noble. */
+const SIGNER = Object.freeze({ 'ML-DSA-65': mlDsa, 'ML-DSA-87': mlDsa87 })
+const PUBLIC_KEY_BYTES = Object.freeze({ 1952: 'ML-DSA-65', 2592: 'ML-DSA-87' })
+
+function checkedAlg(alg) {
+  if (alg === undefined) return 'ML-DSA-65'
+  if (!Object.hasOwn(ALGORITHM_TAGS, alg)) {
+    throw new TypeError(`alg must be 'ML-DSA-65' or 'ML-DSA-87', got ${JSON.stringify(alg)}`)
+  }
+  return alg
+}
+
 // ── the message ─────────────────────────────────────────────────────────────
 
 /**
@@ -198,21 +237,27 @@ export async function fetchOperationTags(ethCall) {
  * @param {number|bigint} opts.nonce   the relay's current nonce for that kid
  * @param {Array<{type: string, value: any}>} opts.args  operation arguments
  * @param {number} [opts.chainId]      defaults to 1111111
+ * @param {'ML-DSA-65'|'ML-DSA-87'} [opts.alg]  the SIGNING key's parameter set.
+ *        Omitted or ML-DSA-65: the message as it has always been. ML-DSA-87:
+ *        the same prefix with the ML-DSA-87 tag after the nonce.
  * @returns {Uint8Array}
  */
-export function authorisingMessage({ relayAddress, operationTag, kid, nonce, args, chainId = CHAIN_ID }) {
+export function authorisingMessage({ relayAddress, operationTag, kid, nonce, args, chainId = CHAIN_ID, alg }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(relayAddress)) {
     throw new TypeError(`relayAddress must be a 20-byte hex address, got '${relayAddress}'`)
   }
   if (!/^[0-9a-f]{16}$/.test(kid)) {
     throw new TypeError(`kid must be 16 lowercase hex characters, got '${kid}'`)
   }
+  const set = checkedAlg(alg)
   const prefix = abiEncode([
     { type: 'address', value: relayAddress },
     { type: 'uint256', value: chainId },
     { type: 'bytes32', value: operationTag },
     { type: 'bytes8',  value: '0x' + kid },
     { type: 'uint64',  value: nonce },
+    // ML-DSA-65 is implicit, so every ML-DSA-65 message is unchanged.
+    ...(set === 'ML-DSA-87' ? [{ type: 'bytes32', value: ALGORITHM_TAGS['ML-DSA-87'] }] : []),
   ])
   return concat([prefix, abiEncode(args)])
 }
@@ -220,20 +265,30 @@ export function authorisingMessage({ relayAddress, operationTag, kid, nonce, arg
 /**
  * Sign an operation for the on-chain verifier.
  *
+ * The key decides the parameter set: a 1952-byte public key signs ML-DSA-65,
+ * a 2592-byte one signs ML-DSA-87 over the message that names it. Any other
+ * length is refused, because the contract refuses it.
+ *
  * @returns {{ kid: string, nonce: string, message: Uint8Array, signature: string,
- *             publicKeyHex: string }}
+ *             publicKeyHex: string, alg: 'ML-DSA-65'|'ML-DSA-87' }}
  *          `signature` and `publicKeyHex` are hex without 0x, the shape the
  *          contract's `bytes calldata` parameters expect once prefixed.
  */
 export function signIntentV2({ keypair, relayAddress, operationTag, nonce, args, chainId = CHAIN_ID }) {
+  const alg = PUBLIC_KEY_BYTES[keypair?.publicKey?.length]
+  if (!alg) {
+    throw new TypeError(
+      `a ${keypair?.publicKey?.length}-byte public key is neither ML-DSA-65 (1952 bytes) nor ML-DSA-87 (2592 bytes)`)
+  }
   const kid = fingerprint(keypair.publicKey)
-  const message = authorisingMessage({ relayAddress, operationTag, kid, nonce, args, chainId })
+  const message = authorisingMessage({ relayAddress, operationTag, kid, nonce, args, chainId, alg })
   return {
     kid,
     nonce: String(nonce),
     message,
-    signature: mlDsa.sign(keypair.secretKey, message),
+    signature: SIGNER[alg].sign(keypair.secretKey, message),
     publicKeyHex: Buffer.from(keypair.publicKey).toString('hex'),
+    alg,
   }
 }
 
@@ -247,9 +302,12 @@ export const ARGS = {
     { type: 'bytes32', value: publicKeyHash },
     { type: 'string',  value: metadataUrl },
   ]),
-  rotateInstitutionKey: (newKid, newPublicKeyHash) => ([
+  // `newAlg` is the NEW key's parameter set. Named in the arguments only when
+  // it is ML-DSA-87, so an ML-DSA-65 rotation is unchanged.
+  rotateInstitutionKey: (newKid, newPublicKeyHash, newAlg) => ([
     { type: 'bytes8',  value: '0x' + newKid },
     { type: 'bytes32', value: newPublicKeyHash },
+    ...(checkedAlg(newAlg) === 'ML-DSA-87' ? [{ type: 'bytes32', value: ALGORITHM_TAGS['ML-DSA-87'] }] : []),
   ]),
   issueCredential: (userKid, userPublicKeyHash, role, expiresAt) => ([
     { type: 'bytes8',  value: '0x' + userKid },

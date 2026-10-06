@@ -52,7 +52,10 @@ export function toV2(operation, payload = {}) {
     case 'rotateKey': {
       const newKid = need(payload, 'newKid', operation)
       const newHex = need(payload, 'newPublicKeyHex', operation)
-      return { args: ARGS.rotateInstitutionKey(newKid, publicKeyHash(newHex)),
+      // The new key signs the rotation too, so an ML-DSA-87 new key is named
+      // in the arguments. An ML-DSA-65 one is not, exactly as before.
+      const newAlg = String(newHex).replace(/^0x/, '').length === 2592 * 2 ? 'ML-DSA-87' : undefined
+      return { args: ARGS.rotateInstitutionKey(newKid, publicKeyHash(newHex), newAlg),
                body: { newKid, newPublicKeyHex: newHex } }
     }
     case 'issueCredential': {

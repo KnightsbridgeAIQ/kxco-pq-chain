@@ -17,11 +17,13 @@ validation, and the block records that **you** authorised it. Anyone who syncs
 the chain re-executes that check, so a counterparty confirms your anchor from
 chain data without an API key and without asking us.
 
-This path verifies **ML-DSA-65** and nothing else: the precompile at 0x0b is
-ML-DSA-65. An identity whose key is ML-DSA-87 never comes here. `KxcoChain`
-sends its intents to the relay as v1.1 (see `RELAY.md`), where the relay
-verifies them off-chain, and the relay refuses an ML-DSA-87 key sent to
-`/intents/v2`.
+This path verifies **ML-DSA-65** through the precompile at 0x0b, and
+**ML-DSA-87** as well where the relay's verifier is PQVerifyingRelayV2 and the
+chain's ML-DSA-87 precompile is active. `GET /intents/v2/params` says which:
+`algorithms` lists the sets you may sign with now. An ML-DSA-87 identity comes
+here only when `algorithms` includes `ML-DSA-87`; otherwise `KxcoChain` sends
+its intents to the relay as v1.1 (see `RELAY.md`), where the relay verifies
+them off-chain.
 
 ---
 
@@ -113,11 +115,17 @@ GET /intents/v2/params
 { "ok": true,
   "verifyingRelay": "0xB94E0829046B7c50db51C5eC4F6F4C8B3d7fb2F5",
   "chainId": 1111111,
-  "legacyRelay": "0x0000000000000000000000000000000000000000" }
+  "legacyRelay": "0x0000000000000000000000000000000000000000",
+  "algorithms": ["ML-DSA-65"] }
 ```
 
 `verifyingRelay` is the one value you cannot derive, and it goes inside the
 signed message. A `503` here means this relay has not cut over; use v1.
+
+`algorithms` lists the ML-DSA parameter sets the chain verifies on this path at
+the current block. `pendingAlgorithms`, when present, lists sets the verifier
+checks that the chain has not switched on yet. A relay that predates the field
+verifies ML-DSA-65 only.
 
 Everything else you compute yourself. The operation tags are
 `keccak256("<operationName>")`, so **you never trust a relay to tell you what
@@ -184,6 +192,16 @@ abi.encode(
 ) ‖ abi.encode(<the operation's arguments, in order>)
 ```
 
+An **ML-DSA-87** key signs the same prefix with one more word after the nonce,
+`bytes32 keccak256("ML-DSA-87")`, so the algorithm is inside the signature. A
+rotation is signed by the old key and the new key over one message: the prefix
+follows the old key, and the arguments end with the same tag when the new key
+is ML-DSA-87. The contract decides the set from the length of the key you send
+(1952 bytes ML-DSA-65, 2592 bytes ML-DSA-87), never from a field you set. Send
+`"alg": "ML-DSA-87"` in the body as well, so the relay can refuse a mismatch
+before any gas is spent. `authorisingMessage({ ..., alg: 'ML-DSA-87' })` builds
+it, and the contract's `authorisingMessageFor(algorithmTag, ...)` returns it.
+
 Every element is inside the signature. Change the chain, the contract, the
 operation, the key id, the nonce or **any argument** and it stops verifying.
 That is the property v1 lacked: an early iteration signed a message bound to
@@ -211,12 +229,17 @@ key once it reaches the chain, so it is worth one call to rule out.
 | 400 | `MISSING_NONCE` | The nonce was absent or not an integer. v2 needs the sequential one, not a random value. |
 | 400 | `UNKNOWN_OPERATION` | Not one of the eight operations. Nothing was sent. |
 | 400 | `BAD_KID` | A key id that is not 16 hex characters, rejected before the chain is asked. |
+| 400 | `UNSUPPORTED_ALG` | `alg` is not `ML-DSA-65` or `ML-DSA-87`. Nothing was sent. |
+| 400 | `ALG_NOT_VERIFIED_ON_CHAIN` | An ML-DSA-87 intent where the verifier checks ML-DSA-65 only. Use v1.1 at `POST /intents`. |
+| 400 | `UNSUPPORTED_PUBLIC_KEY` | The key is neither 1952 nor 2592 bytes. |
+| 403 | `ALG_MISMATCH` | `alg` is not the set of the key you sent. Nothing was sent. |
 | 403 | `UNKNOWN_INSTITUTION` | The chain has no active record for this key id. |
 | 403 | `PUBLIC_KEY_MISMATCH` | The key you sent is not the one registered for this key id. |
 | 403 | `BAD_SIGNATURE` | The chain rejected the signature. Usually the message, not the key: check your encoder against `authorisingMessage()` first. |
 | 409 | `BAD_NONCE` | Not the next nonce. Re-read and re-sign. |
 | 410 | `USE_VERIFIED_PATH` | A valid v1 intent sent to `POST /intents` on a chain that has cut over. Refused before any gas is spent. |
 | 503 | `VERIFIED_PATH_UNAVAILABLE` | This relay has not cut over. Use v1. |
+| 503 | `ALG_NOT_ACTIVE_ON_CHAIN` | The verifier checks ML-DSA-87 but the chain has not switched it on yet. Nothing was sent; retry once `algorithms` lists it. |
 | 503 | `CHAIN_UNAVAILABLE` | The chain could not be read. Nothing was attempted. |
 
 `BAD_SIGNATURE` is the one worth dwelling on, because three different mistakes
