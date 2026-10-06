@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 2.3.1
 **A long-running client follows a change of verifier.** On the verified path
 the signed message names the verifier contract, and the registry can move to
 another verifier with one transaction (`setRelay`). Up to 2.3.0 a `KxcoChain`
