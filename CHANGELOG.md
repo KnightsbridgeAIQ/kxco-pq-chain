@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+**ML-DSA-87 on the verified path.** Where a relay's verifier checks ML-DSA-87
+on-chain (PQVerifyingRelayV2) and `GET /intents/v2/params` lists `ML-DSA-87`
+in `algorithms`, an ML-DSA-87 identity now writes through `POST /intents/v2`
+like an ML-DSA-65 one. Where it is not listed, the client sends v1.1 to
+`POST /intents` exactly as 2.2.0 does.
+
+The algorithm is inside the signed bytes. An ML-DSA-87 key signs the v2
+message with `keccak256("ML-DSA-87")` as a sixth prefix word, after the nonce.
+A rotation's arguments carry the same tag as a third word when the NEW key is
+ML-DSA-87. `authorisingMessage()` takes an optional `alg`,
+`INTENT_V2_ARGS.rotateInstitutionKey()` an optional `newAlg`, and
+`signIntentV2()` signs with the set its key belongs to and returns `alg`. New
+export: `ALGORITHM_TAGS`.
+
+**Rotation on the verified path.** `rotateKey()` takes `newIdentity`, the holder of the new
+key, and sends its signature over the same bytes as the old key's as `newSignature`, which
+the contract checks as proof of possession. Without it, on the verified path, the client
+refuses with `NEW_KEY_SIGNER_REQUIRED` before anything is sent; before this, it sent an
+intent the relay could not complete. A signer holding a different key, or signing with the
+other set, is refused as `BAD_ARGUMENT`. This is how an ML-DSA-65 institution moves to
+ML-DSA-87. A v1 rotation is unchanged.
+
+An ML-DSA-65 identity is unchanged: same path, same bytes, no `alg` field.
+
 ## 2.2.0
 **ML-DSA-87 intents.** An identity whose key is ML-DSA-87 signs a v1.1 intent:
 the v1 message under a new first line, `kxco-relay-v1.1`, followed by

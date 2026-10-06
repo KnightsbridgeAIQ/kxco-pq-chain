@@ -97,13 +97,15 @@ A relay that implements v1.1 lets the **key** decide:
 
 It never retries a signature under the other set.
 
-**On-chain verification is ML-DSA-65 only.** Armature L1 verifies through the
-ML-DSA-65 precompile at 0x0b and has no ML-DSA-87 verifier yet, so an ML-DSA-87
-intent never goes to `POST /intents/v2`: the client does not probe for it, and
-the relay refuses one sent there. The relay verifies ML-DSA-87 off-chain on this
-path. On a chain whose legacy path is closed, that verification succeeds but no
-write route exists for it, and the relay says so rather than sending a
-transaction that would revert.
+**On-chain verification of ML-DSA-87 depends on the verifier.** An ML-DSA-87
+identity takes `POST /intents/v2` only where `GET /intents/v2/params` lists
+`ML-DSA-87` in `algorithms`: the registry names a verifier that checks it
+(PQVerifyingRelayV2) and the chain's ML-DSA-87 precompile is active. See
+`VERIFIED-PATH.md`. Elsewhere it sends v1.1 here, and the relay verifies it
+off-chain. On a chain whose legacy path is closed, that verification succeeds
+but no write route exists for it, and the relay says so rather than sending a
+transaction that would revert; where the verified path takes ML-DSA-87, the
+relay answers `410 USE_VERIFIED_PATH` instead.
 
 ### What the client refuses before it sends
 

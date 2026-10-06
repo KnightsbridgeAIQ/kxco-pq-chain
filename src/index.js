@@ -6,8 +6,9 @@ export { canonicalize }   from './jcs.js'
 // ── Phase 3: on-chain verification ────────────────────────────────────────
 //
 // Version 2 intents, for the path where PQVerifyingRelay verifies the
-// signature on-chain through the ML-DSA-65 precompile rather than the relay
-// verifying it off-chain. v1 above is unchanged and stays supported.
+// signature on-chain through the ML-DSA-65 precompile (and PQVerifyingRelayV2
+// through the ML-DSA-87 one as well) rather than the relay verifying it
+// off-chain. v1 above is unchanged and stays supported.
 export {
   authorisingMessage,
   signIntentV2,
@@ -17,5 +18,6 @@ export {
   ARGS as INTENT_V2_ARGS,
   OPERATION_TAGS,
   OPERATION_NAMES,
+  ALGORITHM_TAGS,
   // CHAIN_ID already comes from client.js; both are 1111111 and one export wins.
 } from './intents-v2.js'

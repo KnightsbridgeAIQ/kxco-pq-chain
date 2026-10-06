@@ -10,9 +10,10 @@
  *      sent before, down the same path.
  *   3. The key decides. A client whose key is ML-DSA-87 signs ML-DSA-87, and a
  *      stated algorithm that disagrees with the key is refused.
- *   4. An ML-DSA-87 intent never reaches the on-chain verified path. The chain
- *      verifies ML-DSA-65 at precompile 0x0b and nothing else, so the relay
- *      verifies ML-DSA-87 off-chain.
+ *   4. An ML-DSA-87 intent reaches the on-chain verified path only where the
+ *      relay lists ML-DSA-87 among the algorithms its verifier checks. Where it
+ *      does not, the relay verifies ML-DSA-87 off-chain. The verified path
+ *      itself is tested in ml-dsa-87-verified.test.js.
  */
 
 import { createServer } from 'node:http'
@@ -169,7 +170,9 @@ async function verifyingRelay() {
   }
 }
 
-test('an ML-DSA-87 client never takes the on-chain verified path, even where the relay offers it', async () => {
+test('an ML-DSA-87 client stays on v1.1 where the verified path does not list ML-DSA-87', async () => {
+  // This relay's params name no algorithms, which means ML-DSA-65 only: the
+  // verifier is PQVerifyingRelay, or ML-DSA-87 is not active on the chain yet.
   const r = await verifyingRelay()
   try {
     const client = new KxcoChain({ relay: r.url, identity: id87 })
@@ -178,7 +181,7 @@ test('an ML-DSA-87 client never takes the on-chain verified path, even where the
 
     const { path, intent } = r.last()
     assert.equal(path, '/intents', 'an ML-DSA-87 intent must go to the relay-verified path')
-    assert.equal(r.probes, 0, 'not even probed: the chain cannot verify ML-DSA-87')
+    assert.equal(r.probes, 1, 'asked once, and the answer did not include ML-DSA-87')
     assert.equal(intent.alg, 'ML-DSA-87')
     const msg = buildSigningMessage(intent.operation, intent.institutionKid, intent.nonce,
       intent.timestamp, intent.payload, intent.alg)
