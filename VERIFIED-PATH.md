@@ -122,6 +122,12 @@ GET /intents/v2/params
 `verifyingRelay` is the one value you cannot derive, and it goes inside the
 signed message. A `503` here means this relay has not cut over; use v1.
 
+**Do not hold `verifyingRelay` for the life of a process.** The registry can be
+pointed at a new verifier, and a message signed for the old address is refused
+`BAD_SIGNATURE`. Read it again at least every five minutes, and once more after
+a `BAD_SIGNATURE` or `BAD_NONCE`, before retrying a single time. `kxco-pq-chain`
+does both from 2.3.1; 2.1.x to 2.3.0 kept it per client for good.
+
 `algorithms` lists the ML-DSA parameter sets the chain verifies on this path at
 the current block. `pendingAlgorithms`, when present, lists sets the verifier
 checks that the chain has not switched on yet. A relay that predates the field
