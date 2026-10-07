@@ -12,14 +12,14 @@ sent. (A malformed one still fails its own validation first, so do not read a
 
 The difference is who is the authority. On v1 the block recorded that the relay
 wrote something. Here your public key and signature travel with the call, every
-validator verifies them through the ML-DSA-65 precompile as part of block
+validator verifies them through the ML-DSA precompile for their set as part of block
 validation, and the block records that **you** authorised it. Anyone who syncs
 the chain re-executes that check, so a counterparty confirms your anchor from
 chain data without an API key and without asking us.
 
-This path verifies **ML-DSA-65** through the precompile at 0x0b, and
-**ML-DSA-87** as well where the relay's verifier is PQVerifyingRelayV2 and the
-chain's ML-DSA-87 precompile is active. `GET /intents/v2/params` says which:
+This path verifies **ML-DSA-87** where the relay's verifier is
+PQVerifyingRelayV2 and the chain's ML-DSA-87 precompile is active, and
+**ML-DSA-65** through the precompile at 0x0b. `GET /intents/v2/params` says which:
 `algorithms` lists the sets you may sign with now. An ML-DSA-87 identity comes
 here only when `algorithms` includes `ML-DSA-87`; otherwise `KxcoChain` sends
 its intents to the relay as v1.1 (see `RELAY.md`), where the relay verifies
@@ -40,7 +40,7 @@ it; KXCO does not have to be in the path.
 
 That is the reason the verification is a consensus rule rather than a service
 check. **A protocol rule holds whoever runs the validators.** Every node that
-syncs re-executes the ML-DSA-65 verification and rejects a block whose
+syncs re-executes the ML-DSA verification and rejects a block whose
 signature does not verify, so the guarantee this document describes is a
 property of the software, not of who is hosting it. Nothing here changes when
 the operator changes: the same client, the same three calls, the same bytes
@@ -113,11 +113,13 @@ GET /intents/v2/params
 
 ```json
 { "ok": true,
-  "verifyingRelay": "0xB94E0829046B7c50db51C5eC4F6F4C8B3d7fb2F5",
+  "verifyingRelay": "0x941217082350AC45Ab9AA035687ce16c6822b657",
   "chainId": 1111111,
   "legacyRelay": "0x0000000000000000000000000000000000000000",
-  "algorithms": ["ML-DSA-65"] }
+  "algorithms": ["ML-DSA-65", "ML-DSA-87"] }
 ```
+
+That is the answer `relay.kxco.ai` gave on 7 October 2026.
 
 `verifyingRelay` is the one value you cannot derive, and it goes inside the
 signed message. A `503` here means this relay has not cut over; use v1.
@@ -168,11 +170,15 @@ Authorization: Bearer <licenceKey>
 ```json
 { "operation":      "anchorAttestation",
   "institutionKid": "1c766d9e2801db23",
-  "publicKeyHex":   "<3904 hex chars: your ML-DSA-65 public key>",
-  "signature":      "<6618 hex chars>",
+  "publicKeyHex":   "<5184 hex chars: your ML-DSA-87 public key>",
+  "signature":      "<9254 hex chars>",
   "nonce":          7,
-  "payload":        { "payloadHash": "0x…", "purpose": "quarterly-report" } }
+  "payload":        { "payloadHash": "0x…", "purpose": "quarterly-report" },
+  "alg":            "ML-DSA-87" }
 ```
+
+An ML-DSA-65 identity sends a 3904-character key and a 6618-character
+signature, and no `alg`, exactly as before.
 
 Success carries the transaction, the chain it landed on, and the fact that the
 chain checked it:
@@ -203,7 +209,7 @@ An **ML-DSA-87** key signs the same prefix with one more word after the nonce,
 rotation is signed by the old key and the new key over one message: the prefix
 follows the old key, and the arguments end with the same tag when the new key
 is ML-DSA-87. The contract decides the set from the length of the key you send
-(1952 bytes ML-DSA-65, 2592 bytes ML-DSA-87), never from a field you set. Send
+(2592 bytes ML-DSA-87, 1952 bytes ML-DSA-65), never from a field you set. Send
 `"alg": "ML-DSA-87"` in the body as well, so the relay can refuse a mismatch
 before any gas is spent. `authorisingMessage({ ..., alg: 'ML-DSA-87' })` builds
 it, and the contract's `authorisingMessageFor(algorithmTag, ...)` returns it.
@@ -235,7 +241,7 @@ key once it reaches the chain, so it is worth one call to rule out.
 | 400 | `MISSING_NONCE` | The nonce was absent or not an integer. v2 needs the sequential one, not a random value. |
 | 400 | `UNKNOWN_OPERATION` | Not one of the eight operations. Nothing was sent. |
 | 400 | `BAD_KID` | A key id that is not 16 hex characters, rejected before the chain is asked. |
-| 400 | `UNSUPPORTED_ALG` | `alg` is not `ML-DSA-65` or `ML-DSA-87`. Nothing was sent. |
+| 400 | `UNSUPPORTED_ALG` | `alg` is not `ML-DSA-87` or `ML-DSA-65`. Nothing was sent. |
 | 400 | `ALG_NOT_VERIFIED_ON_CHAIN` | An ML-DSA-87 intent where the verifier checks ML-DSA-65 only. Use v1.1 at `POST /intents`. |
 | 400 | `UNSUPPORTED_PUBLIC_KEY` | The key is neither 1952 nor 2592 bytes. |
 | 403 | `ALG_MISMATCH` | `alg` is not the set of the key you sent. Nothing was sent. |

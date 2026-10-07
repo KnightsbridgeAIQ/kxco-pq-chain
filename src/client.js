@@ -2,9 +2,9 @@
  * KxcoChain — HTTP client for the KXCO meta-transaction relay.
  *
  * Institutions never interact with Armature L1 directly. This client sends
- * ML-DSA-65 signed intents to the KXCO relay, which validates the signature and
- * submits the EVM transaction on the institution's behalf. Your institution
- * never holds ARMR, never runs a node, and never sets a gas price.
+ * ML-DSA-87 or ML-DSA-65 signed intents to the KXCO relay, which validates the
+ * signature and submits the EVM transaction on the institution's behalf. Your
+ * institution never holds ARMR, never runs a node, and never sets a gas price.
  *
  * Two things are enforced here that were not before, and both are deliberate.
  *
@@ -156,8 +156,16 @@ export class KxcoChain {
 
     // The KEY decides the parameter set. `alg` (or identity.alg) is for an
     // identity that does not expose its public key; where one does, a stated
-    // algorithm that disagrees with it is refused rather than believed. A key
-    // of neither length leaves the default, ML-DSA-65, as before.
+    // algorithm that disagrees with it is refused rather than believed.
+    //
+    // With no usable key and nothing stated (or a key of neither length), the
+    // client sends v1 intents, and v1 means ML-DSA-65. That is what every
+    // identity that hides its key was before `alg` existed, so those keep
+    // working unchanged. This client makes no keys, so the fallback never sets
+    // what a new identity signs with; its own key does. An ML-DSA-87 identity
+    // that hides its key states alg: 'ML-DSA-87'. If it does not, its v1
+    // intents are refused (ALG_MISMATCH, per RELAY.md), never written as
+    // ML-DSA-65.
     const statedAlg = alg ?? identity.alg
     if (statedAlg !== undefined && !INTENT_ALGS.includes(statedAlg)) {
       throw new KxcoChainError(

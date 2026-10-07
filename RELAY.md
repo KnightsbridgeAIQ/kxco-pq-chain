@@ -84,7 +84,7 @@ signature is 4627 bytes (9254 hex characters) and the public key 2592 bytes.
 `buildSigningMessage(..., alg)` and `buildIntent({ ..., alg })` produce v1.1;
 without `alg` they produce v1 exactly as before.
 
-`alg` may only be `ML-DSA-65` or `ML-DSA-87`. `KxcoChain` sends v1.1 only for an
+`alg` may only be `ML-DSA-87` or `ML-DSA-65`. `KxcoChain` sends v1.1 only for an
 ML-DSA-87 key, so an ML-DSA-65 client keeps sending v1 and a relay that predates
 v1.1 sees no change.
 

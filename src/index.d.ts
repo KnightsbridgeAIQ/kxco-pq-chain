@@ -24,13 +24,13 @@ export interface RelayIntent {
 }
 
 /** The ML-DSA parameter sets an intent may name. */
-export type IntentAlg = 'ML-DSA-65' | 'ML-DSA-87'
+export type IntentAlg = 'ML-DSA-87' | 'ML-DSA-65'
 
 export const INTENT_ALGS: readonly IntentAlg[]
 
 /**
- * The parameter set a public key belongs to, decided by its length (1952
- * bytes for ML-DSA-65, 2592 for ML-DSA-87). Throws `BAD_ARGUMENT` otherwise.
+ * The parameter set a public key belongs to, decided by its length (2592
+ * bytes for ML-DSA-87, 1952 for ML-DSA-65). Throws `BAD_ARGUMENT` otherwise.
  */
 export function algForPublicKey(publicKey: Uint8Array | string): IntentAlg
 
@@ -82,8 +82,14 @@ export interface KxcoChainOptions {
   /**
    * The identity's ML-DSA parameter set, for an identity that does not expose
    * its public key. The key decides: where the public key is known its length
-   * sets this, and a stated value that disagrees throws `BAD_CONFIG`. Default
-   * ML-DSA-65.
+   * sets this, and a stated value that disagrees throws `BAD_CONFIG`.
+   *
+   * With neither, the client sends v1 intents, which mean ML-DSA-65: that is
+   * every identity that hid its key before this option existed, and it keeps
+   * working unchanged. The client makes no keys, so this never sets what a new
+   * identity signs with. An ML-DSA-87 identity that hides its key passes
+   * `'ML-DSA-87'` here; without it the relay refuses its v1 intents with
+   * `ALG_MISMATCH`.
    *
    * An ML-DSA-87 client takes the verified path where the relay lists
    * ML-DSA-87 in `GET /intents/v2/params` `algorithms`, and signs the message
