@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.2
+
+Documentation. No source change.
+
+The package description, the opening of the README and the keywords now say
+what 2.3.x already does: an ML-DSA-87 identity signs its writes, Armature L1
+verifies them in consensus as it does ML-DSA-65, and a key rotates from
+ML-DSA-65 to ML-DSA-87. The table at the top names both precompiles.
+`ml-dsa-87` joins the keywords.
+
 ## 2.3.1
 **A long-running client follows a change of verifier.** On the verified path
 the signed message names the verifier contract, and the registry can move to

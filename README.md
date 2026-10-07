@@ -1,6 +1,6 @@
 # kxco-pq-chain
 
-**Post-quantum records on Armature L1 with no wallet, no token and no node: every validator verifies your ML-DSA-65 signature in consensus.**
+**Post-quantum records on Armature L1 with no wallet, no token and no node: every validator verifies your ML-DSA-87 or ML-DSA-65 signature in consensus.**
 
 [![npm](https://img.shields.io/npm/v/kxco-pq-chain?label=npm&color=b0964f)](https://www.npmjs.com/package/kxco-pq-chain)
 [![downloads](https://img.shields.io/npm/dm/kxco-pq-chain?label=downloads&color=b0964f)](https://www.npmjs.com/package/kxco-pq-chain)
@@ -11,9 +11,9 @@
 [![node](https://img.shields.io/node/v/kxco-pq-chain.svg)](https://nodejs.org)
 [![CI](https://github.com/KnightsbridgeAIQ/kxco-pq-chain/actions/workflows/ci.yml/badge.svg)](https://github.com/KnightsbridgeAIQ/kxco-pq-chain/actions/workflows/ci.yml)
 
-Institutions sign ML-DSA-65 intents with their existing post-quantum key, POST them to the KXCO relay at `https://relay.kxco.ai`, and receive a transaction hash. KXCO validates the signature, pays gas in ARMR, and submits the EVM transaction on Armature L1. No wallets, no gas, no Ethereum node required.
+Institutions sign ML-DSA-87 or ML-DSA-65 intents with their existing post-quantum key, POST them to the KXCO relay at `https://relay.kxco.ai`, and receive a transaction hash. KXCO validates the signature, pays gas in ARMR, and submits the EVM transaction on Armature L1. No wallets, no gas, no Ethereum node required.
 
-- **Verified in consensus.** Your public key and signature travel with the call, and every validator checks them through the ML-DSA-65 precompile as a protocol rule, so the block records that your institution authorised the write, per [VERIFIED-PATH.md](./VERIFIED-PATH.md).
+- **Verified in consensus.** Your public key and signature travel with the call, and every validator checks them through the ML-DSA-87 or ML-DSA-65 precompile as a protocol rule, so the block records that your institution authorised the write, per [VERIFIED-PATH.md](./VERIFIED-PATH.md).
 - **Confirmed from chain data.** Anyone who syncs Armature L1 re-executes that check, so a counterparty confirms your anchor with no API key and no call to KXCO.
 - **No wallet, no token, no node.** KXCO's relay pays the gas and submits the transaction, and your institution is invoiced: it never holds ARMR, sets a gas price or configures an RPC endpoint.
 - **Licensed from the first line.** The client checks for your licence key when it is constructed, so a missing key surfaces at deploy time rather than on a customer's first credential, and a relay on `localhost` needs none for development and CI.
@@ -36,7 +36,7 @@ Institutions sign ML-DSA-65 intents with their existing post-quantum key, POST t
 | Network | Armature L1, a permissioned, EVM-compatible settlement layer |
 | Chain ID | 1111111 |
 | Consensus | QBFT PoA, instant finality (~2 s target block time) |
-| PQ verification | On-chain ML-DSA-65 at precompile `0x0b` (NIST FIPS 204) |
+| PQ verification | On-chain ML-DSA-87 at precompile `0x4b58434f00000000000000000000000000000087` and ML-DSA-65 at `0x0b` (NIST FIPS 204) |
 | Token | ARMR, with gas paid by the KXCO relay, so clients hold no crypto |
 | Explorer & docs | [chain.kxco.ai](https://chain.kxco.ai) |
 
@@ -96,7 +96,7 @@ Writes to the hosted relay run under your **licence key**. The constructor check
 
 ## How it works
 
-Your backend constructs an intent describing the operation (register, issue, revoke, anchor, rotate). The client reads the verifying relay's address and your next on-chain nonce, signs the exact bytes the contract rebuilds with your ML-DSA-65 private key, and POSTs the intent with your public key to `https://relay.kxco.ai/intents/v2`. Every Armature L1 validator checks that signature through the ML-DSA-65 precompile during block validation, so the block records that your institution authorised the write. The relay returns the `txHash` and `blockNumber` once the transaction is included. Your institution never holds ARMR, never configures an RPC endpoint, and is billed monthly via invoice.
+Your backend constructs an intent describing the operation (register, issue, revoke, anchor, rotate). The client reads the verifying relay's address and your next on-chain nonce, signs the exact bytes the contract rebuilds with your ML-DSA-87 or ML-DSA-65 private key, and POSTs the intent with your public key to `https://relay.kxco.ai/intents/v2`. Every Armature L1 validator checks that signature through the ML-DSA-87 or ML-DSA-65 precompile during block validation, so the block records that your institution authorised the write. The relay returns the `txHash` and `blockNumber` once the transaction is included. Your institution never holds ARMR, never configures an RPC endpoint, and is billed monthly via invoice.
 
 The client takes this path automatically wherever the relay offers it, and speaks the v1 contract in [RELAY.md](./RELAY.md) to a relay that predates it. The wire format is in [VERIFIED-PATH.md](./VERIFIED-PATH.md).
 
@@ -355,7 +355,7 @@ above it.
 
 ## Security
 
-Intents are signed with **ML-DSA-65** (NIST FIPS 204) via [`kxco-post-quantum`](https://www.npmjs.com/package/kxco-post-quantum), running on the OpenSSL 3.5 primitives where the runtime provides them, and Armature L1 checks each signature in consensus. No custom cryptography.
+Intents are signed with **ML-DSA-87** or **ML-DSA-65** (NIST FIPS 204) via [`kxco-post-quantum`](https://www.npmjs.com/package/kxco-post-quantum), running on the OpenSSL 3.5 primitives where the runtime provides them, and Armature L1 checks each signature in consensus. No custom cryptography.
 
 Evidenced, and reproducible on your own machine:
 
