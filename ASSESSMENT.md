@@ -11,9 +11,9 @@ and publishes the lot. Cited here, proven there.
 ## What this package is
 
 The client that turns an institution's decision into a fact on Armature L1.
-Build an intent, sign it with ML-DSA-65, POST it to the relay, and every
-validator checks that signature as a protocol rule before the transaction is
-included.
+Build an intent, sign it with ML-DSA-87 or ML-DSA-65, POST it to the relay, and
+every validator checks that signature as a protocol rule before the transaction
+is included.
 
 **The signature is verified in consensus, not by a service.** This is the claim
 worth assessing. The relay submits the transaction and pays for it, and it
@@ -68,6 +68,10 @@ inconvenient — an intent nobody can verify is worse than one that waits — an
 it is the interoperable-transition problem in its most literal form, where every
 validator is a relying party and the chain is the coordination mechanism.
 
+ML-DSA-87 has made that change. The relay accepts it as v1.1, and the verified
+path takes it wherever `GET /intents/v2/params` lists it, as `relay.kxco.ai` did
+on 7 October 2026. The key decides which set an identity signs with.
+
 ## Running it
 
 **Release integrity.** Every release carries a SLSA provenance attestation and
@@ -78,8 +82,8 @@ from `npm run evidence` recording identity, the test run, the SBOM and the
 
 **Supported versions.** One line moving forward. Fixes land in the next release.
 
-**Cost.** No hardware or runtime ceiling. Signing an intent is one ML-DSA-65
-operation and is never the bottleneck; the pace is the relay's and the chain's
+**Cost.** No hardware or runtime ceiling. Signing an intent is one ML-DSA-87 or
+ML-DSA-65 operation and is never the bottleneck; the pace is the relay's and the chain's
 block time.
 
 **Connection.** `relay.kxco.ai`, which negotiates the hybrid key exchange group

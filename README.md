@@ -135,7 +135,8 @@ All methods are on your `KxcoChain` client and return `Promise<{ txHash: string,
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `opts.identity` | `{ kid: string; sign(msg: Uint8Array): Promise<Uint8Array> }` | yes | `KxcoIdentity` from `kxco-pq-sdk`, or any object with `.kid`, `.sign()` and `.publicKeyHex` |
-| `opts.publicKeyHex` | `string` | no | Hex ML-DSA-65 public key sent with each write so the chain can bind it to your registry record. Read from `identity.publicKeyHex` or `identity.publicKey` when omitted |
+| `opts.publicKeyHex` | `string` | no | Hex ML-DSA-87 or ML-DSA-65 public key sent with each write so the chain can bind it to your registry record. Read from `identity.publicKeyHex` or `identity.publicKey` when omitted. Its length decides the set this client signs with |
+| `opts.alg` | `'ML-DSA-87' \| 'ML-DSA-65'` | no | The identity's parameter set, for an identity that does not expose its public key. Where the key is known its length decides, and a value that disagrees throws `BAD_CONFIG`. With neither, the client sends v1 intents, which mean ML-DSA-65, so an identity from before this option works unchanged. An ML-DSA-87 identity that hides its key passes `'ML-DSA-87'` |
 | `opts.relay` | `string` | no | Relay base URL. Default: `'https://relay.kxco.ai'` |
 | `opts.licenceKey` | `string` | for a hosted relay | Falls back to `KXCO_LICENCE_KEY` / `KXCO_LICENSE_KEY`. Missing throws at construction |
 | `opts.licenceHeader` | `'authorization' \| 'x-kxco-licence'` | no | Which header carries it. Default `'authorization'`, as a Bearer token |
@@ -144,7 +145,7 @@ All methods are on your `KxcoChain` client and return `Promise<{ txHash: string,
 | `opts.timeout` | `number` | no | Request timeout in ms. Default: `10000` |
 | `opts.onUsageEvent` | `(event) => void` | no | Structured record per write, for your own observability. Off by default |
 
-Read-only: `chain.relay` and `chain.licensed`. The licence key itself is never exposed.
+Read-only: `chain.relay`, `chain.licensed` and `chain.alg`, the parameter set this client signs with. The licence key itself is never exposed.
 
 ---
 
@@ -154,7 +155,7 @@ Register an institution on-chain. Called once during onboarding.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `publicKeyHex` | `string` | yes | Hex-encoded 1952-byte ML-DSA-65 public key |
+| `publicKeyHex` | `string` | yes | Hex-encoded public key: 2592 bytes for ML-DSA-87, 1952 for ML-DSA-65 |
 | `metadataUrl` | `string` | no | URL of institution metadata JSON |
 
 ---
@@ -166,7 +167,7 @@ Record a user credential issuance on-chain.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `userKid` | `string` | yes | 16-hex-char kid of the issued user |
-| `userPublicKeyHex` | `string` | yes | Hex-encoded user ML-DSA-65 public key |
+| `userPublicKeyHex` | `string` | yes | Hex-encoded user ML-DSA-87 or ML-DSA-65 public key |
 | `role` | `string` | yes | Role string, e.g. `'verified-user'` |
 | `expiresAt` | `number` | no | Unix seconds. Omit or `0` for no expiry |
 
@@ -239,14 +240,15 @@ Names over the existing `registerInstitution` and `issueAgentCredential` wire op
 
 ---
 
-### `chain.rotateKey({ newKid, newPublicKeyHex })`
+### `chain.rotateKey({ newKid, newPublicKeyHex, newIdentity? })`
 
-Record an institution key rotation on-chain.
+Record an institution key rotation on-chain. Either key may be ML-DSA-87 or ML-DSA-65, which is how an ML-DSA-65 institution moves to ML-DSA-87.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `newKid` | `string` | yes | New 16-hex-char kid after rotation |
-| `newPublicKeyHex` | `string` | yes | Hex-encoded new ML-DSA-65 public key |
+| `newPublicKeyHex` | `string` | yes | Hex-encoded new ML-DSA-87 or ML-DSA-65 public key |
+| `newIdentity` | `{ sign(msg: Uint8Array): Promise<Uint8Array>; publicKeyHex?: string; publicKey?: Uint8Array }` | on the verified path | The holder of the new key. It signs the same bytes as this identity, to prove possession. Missing throws `NEW_KEY_SIGNER_REQUIRED` before anything is sent. Not used on v1 |
 
 ---
 
@@ -257,7 +259,7 @@ Register an AI agent or machine identity on-chain. Called by the sponsoring inst
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `agentKid` | `string` | yes | 16-hex-char kid of the agent |
-| `agentPublicKeyHex` | `string` | yes | Hex-encoded agent ML-DSA-65 public key |
+| `agentPublicKeyHex` | `string` | yes | Hex-encoded agent ML-DSA-87 or ML-DSA-65 public key |
 | `agentType` | `'llm' \| 'robot' \| 'iot' \| 'process'` | yes | Agent category |
 | `scopeHash` | `string` | yes | Hex SHA-256 of the canonical scope JSON |
 | `expiresAt` | `number` | yes | Unix seconds. Mandatory, and greater than 0 |

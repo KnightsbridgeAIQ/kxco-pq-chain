@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.3.3 (2026-10-07)
+
+Documentation. No source change.
+
+ML-DSA-87 is the parameter set KXCO recommends for every new key, so the README,
+RELAY.md, VERIFIED-PATH.md, ASSESSMENT.md and the type declarations name it
+first wherever they name both sets. The README tables for `publicKeyHex`,
+`userPublicKeyHex`, `newPublicKeyHex` and `agentPublicKeyHex` said ML-DSA-65
+only. Each takes either set: the client has signed ML-DSA-87 intents since 2.2.0
+and sent them on the verified path since 2.3.0.
+
+The README now documents the constructor's `alg` option, the read-only
+`chain.alg`, and `newIdentity` on `rotateKey()`, which the verified path needs
+for a rotation, including one from ML-DSA-65 to ML-DSA-87.
+
+VERIFIED-PATH.md quotes the `GET /intents/v2/params` answer `relay.kxco.ai`
+gave on 7 October 2026, which lists ML-DSA-87, and its example write is an
+ML-DSA-87 one.
+
+The client still reads an identity that exposes no key and states no `alg` as
+ML-DSA-65, and sends it v1 intents. That is every such identity from before
+`alg` existed. The client makes no keys, so this never sets what a new identity
+signs with, and the comment and the `alg` documentation now say why.
+
 ## 2.3.2
 
 Documentation. No source change.

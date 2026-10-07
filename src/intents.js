@@ -2,8 +2,8 @@
  * Relay intent builder + signer.
  *
  * Every relay request is a signed JSON intent that proves the institution
- * authorised the operation. The relay validates the ML-DSA-65 signature
- * off-chain before submitting the EVM transaction.
+ * authorised the operation. The relay validates the ML-DSA-87 or ML-DSA-65
+ * signature off-chain before submitting the EVM transaction.
  *
  * Signing message format (newline-delimited, UTF-8):
  *
@@ -25,7 +25,7 @@
  * the algorithm on its own line directly after a different first line:
  *
  *   kxco-relay-v1.1
- *   alg: <ML-DSA-65 | ML-DSA-87>
+ *   alg: <ML-DSA-87 | ML-DSA-65>
  *   operation: <name>
  *   ... the remaining v1 lines, unchanged ...
  *
@@ -41,7 +41,10 @@ import { KxcoChainError } from './errors.js'
 
 const enc = new TextEncoder()
 
-/** The ML-DSA parameter sets an intent may name. ML-DSA-65 is the default. */
+/**
+ * The ML-DSA parameter sets an intent may name. An intent that names none is
+ * v1, which means ML-DSA-65; the key, not this list, decides which set signs.
+ */
 export const INTENT_ALGS = Object.freeze(['ML-DSA-65', 'ML-DSA-87'])
 
 /** Public key length in bytes for each set (FIPS 204, table 2). */
