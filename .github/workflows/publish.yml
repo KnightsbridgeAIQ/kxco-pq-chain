@@ -36,13 +36,13 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          # Node 24 because its bundled npm (11.19 on 24.21) already carries
+          # Node 26 because its bundled npm (11.20 on 26.11) already carries
           # Trusted Publishing's OIDC support, which arrived in npm 11.5.1. On
           # Node 22 the bundled npm is older and had to be replaced with
           # `npm install -g npm@11`, a download OpenSSF Scorecard can never count
           # as pinned. Using the npm the runtime ships removes that download.
           # kxco-post-quantum publishes this way with provenance.
-          node-version: '24'
+          node-version: '26'
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
