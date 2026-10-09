@@ -56,7 +56,7 @@ For reading chain state (querying registered identities, verifying credentials o
 npm install kxco-pq-chain
 ```
 
-Requires Node.js 20.19 or later. `kxco-post-quantum` is installed automatically as a dependency.
+Requires Node.js 22.12 or later. `kxco-post-quantum` is installed automatically as a dependency.
 
 ---
 
