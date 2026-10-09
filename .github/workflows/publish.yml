@@ -11,35 +11,39 @@ on:
         required: true
         type: string
 
+# Read-only by default. The one job that needs to write raises exactly what
+# it needs, so a compromised action in any other step cannot reach further
+# than reading the checkout.
 permissions:
-  # contents: write is needed to attach the SBOM to the GitHub Release. An
-  # Actions artifact is not a published SBOM: it expires on the retention
-  # window and needs an authenticated GitHub session to fetch, so a third party
-  # assessing supply chain posture cannot read it. A release asset is a
-  # permanent unauthenticated URL, which is the thing being claimed.
-  contents: write
-  id-token: write   # required for Trusted Publishing OIDC and --provenance
+  contents: read
 
 jobs:
   publish:
+    permissions:
+      # contents: write is needed to attach the SBOM to the GitHub Release. An
+      # Actions artifact is not a published SBOM: it expires on the retention
+      # window and needs an authenticated GitHub session to fetch, so a third party
+      # assessing supply chain posture cannot read it. A release asset is a
+      # permanent unauthenticated URL, which is the thing being claimed.
+      contents: write
+      id-token: write   # required for Trusted Publishing OIDC and --provenance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          # Node 24 because its bundled npm (11.19 on 24.21) already carries
+          # Trusted Publishing's OIDC support, which arrived in npm 11.5.1. On
+          # Node 22 the bundled npm is older and had to be replaced with
+          # `npm install -g npm@11`, a download OpenSSF Scorecard can never count
+          # as pinned. Using the npm the runtime ships removes that download.
+          # kxco-post-quantum publishes this way with provenance.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Upgrade npm CLI to the 11.x line
-        # Trusted Publishing's OIDC integration needs npm >= 11.5.1 and the npm
-        # bundled with the runner's Node is older. Pinned to 11.x, never @latest:
-        # npm 12 requires Node ^22.22 || ^24.15 || >=26, and @latest broke this
-        # exact step in kxco-post-quantum, so an unpinned install is an outage.
-        run: npm install -g npm@11
 
       - run: npm ci
       - run: npm test
@@ -74,3 +78,38 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --title "$TAG" --generate-notes
           gh release upload "$TAG" sbom.cyclonedx.json --clobber
+
+      # The npm provenance for this exact tarball, attached to the release as
+      # <pkg>-<ver>.sigstore.json (the Sigstore bundle) and <pkg>-<ver>.intoto.jsonl
+      # (its DSSE envelope), which is what OpenSSF Scorecard's Signed-Releases check
+      # reads. Nothing is re-signed: these are the attestations npm recorded when
+      # this run published. The subject and sha512 are checked against the registry
+      # before upload, so a mismatched file is refused rather than attached.
+      - name: Attach the npm provenance to the GitHub Release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PKG="$(node -p "require('./package.json').name")"
+          VER="$(node -p "require('./package.json').version")"
+          for i in $(seq 1 30); do
+            curl -fsS "https://registry.npmjs.org/-/npm/v1/attestations/${PKG}@${VER}" -o attestations.json && break
+            sleep 10
+          done
+          curl -fsS "https://registry.npmjs.org/${PKG}/${VER}" -o version.json
+          node -e '
+            const fs = require("fs");
+            const [pkg, ver] = process.argv.slice(1);
+            const att = JSON.parse(fs.readFileSync("attestations.json", "utf8")).attestations
+              .find((a) => a.predicateType === "https://slsa.dev/provenance/v1");
+            if (!att) throw new Error("no SLSA provenance on npm for " + pkg + "@" + ver);
+            const stmt = JSON.parse(Buffer.from(att.bundle.dsseEnvelope.payload, "base64").toString());
+            const integrity = JSON.parse(fs.readFileSync("version.json", "utf8")).dist.integrity;
+            const sha512 = Buffer.from(integrity.split("-")[1], "base64").toString("hex");
+            const s = stmt.subject[0];
+            if (s.name !== "pkg:npm/" + pkg + "@" + ver || s.digest.sha512 !== sha512)
+              throw new Error("provenance subject does not match the published tarball");
+            fs.writeFileSync(pkg + "-" + ver + ".sigstore.json", JSON.stringify(att.bundle, null, 1));
+            fs.writeFileSync(pkg + "-" + ver + ".intoto.jsonl", JSON.stringify(att.bundle.dsseEnvelope) + "\n");
+          ' "$PKG" "$VER"
+          gh release upload "v${VER}" "${PKG}-${VER}.sigstore.json" "${PKG}-${VER}.intoto.jsonl" --clobber

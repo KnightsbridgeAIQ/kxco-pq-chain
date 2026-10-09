@@ -1,12 +1,18 @@
 name: Dependabot auto-merge
 on: pull_request
 
+# Read-only by default. The one job that needs to write raises exactly what
+# it needs, so a compromised action in any other step cannot reach further
+# than reading the checkout.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   automerge:
+    # gh pr merge --auto needs to write to the pull request and the branch.
+    permissions:
+      contents: write
+      pull-requests: write
     name: automerge
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest

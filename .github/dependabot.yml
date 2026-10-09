@@ -1,0 +1,46 @@
+version: 2
+
+updates:
+  # Runtime and development dependencies from package.json. Reviews are
+  # weekly. Security updates are opened by Dependabot's security-updates
+  # feature, which is configured at the repo level, not here.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: deps
+      include: scope
+
+  # Pin updates for the actions used in our workflows. Dependabot will open
+  # PRs proposing newer commit SHAs for actions/checkout etc, so we never
+  # have to track upstream release notes by hand.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+      include: scope
+    # One pull request for all action bumps, not one each. Actions are pinned
+    # to commit SHAs and reviewed together anyway, so the batch is how they are
+    # actually read. Security updates are opened by a separate Dependabot
+    # feature and are not grouped by this.
+    groups:
+      github-actions:
+        patterns:
+          - "*"

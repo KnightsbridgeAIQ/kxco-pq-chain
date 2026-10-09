@@ -1,3 +1,8 @@
-# Required reviewer on every PR in this repository.
+# Code owners for kxco-pq-chain.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# GitHub requests a review from every owner except the PR's author, so a PR
+# opened by JackKXCO goes to JohnKHeff and KeralPatel, and one opened by
+# Dependabot goes to all three.
 
-* @JackKXCO
+* @JohnKHeff @KeralPatel @JackKXCO
