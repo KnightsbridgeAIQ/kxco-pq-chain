@@ -78,3 +78,38 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --title "$TAG" --generate-notes
           gh release upload "$TAG" sbom.cyclonedx.json --clobber
+
+      # The npm provenance for this exact tarball, attached to the release as
+      # <pkg>-<ver>.sigstore.json (the Sigstore bundle) and <pkg>-<ver>.intoto.jsonl
+      # (its DSSE envelope), which is what OpenSSF Scorecard's Signed-Releases check
+      # reads. Nothing is re-signed: these are the attestations npm recorded when
+      # this run published. The subject and sha512 are checked against the registry
+      # before upload, so a mismatched file is refused rather than attached.
+      - name: Attach the npm provenance to the GitHub Release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PKG="$(node -p "require('./package.json').name")"
+          VER="$(node -p "require('./package.json').version")"
+          for i in $(seq 1 30); do
+            curl -fsS "https://registry.npmjs.org/-/npm/v1/attestations/${PKG}@${VER}" -o attestations.json && break
+            sleep 10
+          done
+          curl -fsS "https://registry.npmjs.org/${PKG}/${VER}" -o version.json
+          node -e '
+            const fs = require("fs");
+            const [pkg, ver] = process.argv.slice(1);
+            const att = JSON.parse(fs.readFileSync("attestations.json", "utf8")).attestations
+              .find((a) => a.predicateType === "https://slsa.dev/provenance/v1");
+            if (!att) throw new Error("no SLSA provenance on npm for " + pkg + "@" + ver);
+            const stmt = JSON.parse(Buffer.from(att.bundle.dsseEnvelope.payload, "base64").toString());
+            const integrity = JSON.parse(fs.readFileSync("version.json", "utf8")).dist.integrity;
+            const sha512 = Buffer.from(integrity.split("-")[1], "base64").toString("hex");
+            const s = stmt.subject[0];
+            if (s.name !== "pkg:npm/" + pkg + "@" + ver || s.digest.sha512 !== sha512)
+              throw new Error("provenance subject does not match the published tarball");
+            fs.writeFileSync(pkg + "-" + ver + ".sigstore.json", JSON.stringify(att.bundle, null, 1));
+            fs.writeFileSync(pkg + "-" + ver + ".intoto.jsonl", JSON.stringify(att.bundle.dsseEnvelope) + "\n");
+          ' "$PKG" "$VER"
+          gh release upload "v${VER}" "${PKG}-${VER}.sigstore.json" "${PKG}-${VER}.intoto.jsonl" --clobber
