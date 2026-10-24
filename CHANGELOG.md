@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.1 (2026-10-24)
+
+Documentation and the locked dependency. No change to the API or its behaviour.
+
+The README and VERIFIED-PATH.md point chain reads at Armature's public RPC,
+`https://api.purse.kxco.ai/rpc/armature`, in place of `https://chain.kxco.ai/rpc`.
+ASSESSMENT.md now says Armature verified ML-DSA-65 alone from block 0 until
+October 2026, where it said the chain signs at ML-DSA-65.
+
+The lockfile installs `kxco-post-quantum` 1.11.1, where 2.4.0 locked 1.7.9.
+The declared range, `^1.6.0`, is unchanged.
+
 ## 2.4.0 (2026-10-09)
 
 Runtime support. No change to the API or its behaviour.
