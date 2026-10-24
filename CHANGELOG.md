@@ -2,15 +2,23 @@
 
 ## 2.4.1 (2026-10-24)
 
-Documentation and the locked dependency. No change to the API or its behaviour.
+Documentation, the locked dependencies and the workflow actions. No source
+file changed and the API is the same.
 
 The README and VERIFIED-PATH.md point chain reads at Armature's public RPC,
 `https://api.purse.kxco.ai/rpc/armature`, in place of `https://chain.kxco.ai/rpc`.
 ASSESSMENT.md now says Armature verified ML-DSA-65 alone from block 0 until
 October 2026, where it said the chain signs at ML-DSA-65.
 
-The lockfile installs `kxco-post-quantum` 1.11.1, where 2.4.0 locked 1.7.9.
-The declared range, `^1.6.0`, is unchanged.
+The lockfile installs `kxco-post-quantum` 1.11.1, where 2.4.0 locked 1.7.9,
+and with it `@noble/post-quantum` 0.7.1 and `@noble/curves` and
+`@noble/ciphers` 2.4.0. The declared range, `^1.6.0`, is unchanged, so an
+install from npm resolves its dependencies as before. The test suite passes on
+the new lockfile on Node 22, 24 and 26.
+
+The workflows pin newer actions: `actions/setup-node` 7.1.0,
+`actions/upload-artifact` 7.0.2, `ossf/scorecard-action` 2.5.0 and
+`github/codeql-action/upload-sarif` 4.39.0.
 
 ## 2.4.0 (2026-10-09)
 
