@@ -269,8 +269,8 @@ Nothing here asks you to take our word.
 # every registry write is verified in consensus
 curl -s https://relay.kxco.ai/health
 
-# the anchor, from the chain, with no KXCO service in the path
-curl -s -X POST https://chain.kxco.ai/rpc -H 'content-type: application/json' \
+# the anchor, from Armature's public RPC, with no relay in the path
+curl -s -X POST https://api.purse.kxco.ai/rpc/armature -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0x…"]}'
 
 # the attestation, offline, no network

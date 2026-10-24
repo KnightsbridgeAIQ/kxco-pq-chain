@@ -60,8 +60,8 @@ cause a wrong one to land.
 
 **Inherited.** Signing primitives belong to `kxco-post-quantum`.
 
-**Coordinated, because a chain is a set of relying parties.** Armature L1 signs
-at Category 3 with ML-DSA-65 from block 0, so changing what this client signs
+**Coordinated, because a chain is a set of relying parties.** Armature L1 verified
+ML-DSA-65 alone, at Category 3, from block 0 until October 2026, so changing what this client signs
 with is a chain-level change: the relay must accept it and validators must
 verify it as a protocol rule. That ordering is correct rather than
 inconvenient — an intent nobody can verify is worse than one that waits — and
