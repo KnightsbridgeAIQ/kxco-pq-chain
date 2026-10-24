@@ -46,7 +46,7 @@ Institutions sign ML-DSA-87 or ML-DSA-65 intents with their existing post-quantu
 
 Any institution backend that needs on-chain credential management (registering identities, issuing and revoking credentials, anchoring audit roots, rotating keys) without running an Ethereum node or holding crypto. If you already have a `KxcoIdentity` from `kxco-pq-sdk`, this is the only client you need to write to the chain.
 
-For reading chain state (querying registered identities, verifying credentials on-chain), use `ethers.js` directly against `https://chain.kxco.ai/rpc`.
+For reading chain state (querying registered identities, verifying credentials on-chain), use `ethers.js` directly against `https://api.purse.kxco.ai/rpc/armature`.
 
 ---
 
