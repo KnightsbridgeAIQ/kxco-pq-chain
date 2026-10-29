@@ -174,7 +174,7 @@ test('the locally derived operation tags match the deployed contract', async (t)
   // never has to trust a relay to tell it what it is signing. That is only
   // safe while it agrees with the contract's constants, and a drift would
   // produce signatures rejected for no visible reason.
-  const rpc = process.env.RPC_URL || 'https://chain.kxco.ai/rpc'
+  const rpc = process.env.RPC_URL || 'https://api.purse.kxco.ai/rpc/armature'
   const address = process.env.VERIFYING_RELAY || VERIFIER
 
   let live
