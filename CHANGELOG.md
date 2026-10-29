@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.2 (2026-10-29)
+
+Dependencies. No source file changed and the API is the same.
+
+- `kxco-post-quantum` dependency floor moves from `^1.6.0` to `^1.13.0`, the current release.
+
 ## 2.4.1 (2026-10-24)
 
 Documentation, the locked dependencies and the workflow actions. No source

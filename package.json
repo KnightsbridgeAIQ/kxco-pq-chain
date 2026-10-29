@@ -1,6 +1,6 @@
 {
   "name": "kxco-pq-chain",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Post-quantum writes to Armature L1: every validator verifies your ML-DSA-87 or ML-DSA-65 signature in consensus and KXCO pays the gas. No wallet, token or node. Identities, credential issuance and revocation, key rotation, audit roots and attestations.",
   "keywords": [
     "post-quantum",
@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",
-    "kxco-post-quantum": "^1.6.0"
+    "kxco-post-quantum": "^1.13.0"
   },
   "scripts": {
     "test": "node --test --test-timeout=30000 test/chain.test.js test/licence.test.js test/verified-path.test.js test/property.test.js test/ml-dsa-87.test.js test/ml-dsa-87-verified.test.js test/verifier-rediscovery.test.js",
